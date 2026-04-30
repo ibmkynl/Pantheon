@@ -1,0 +1,32 @@
+{
+  "name": "@pantheon/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.4",
+    "better-sqlite3": "^11.9.1",
+    "drizzle-orm": "^0.42.0",
+    "fastify": "^5.3.3",
+    "uuid": "^11.1.0",
+    "yaml": "^2.8.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.17",
+    "@types/uuid": "^10.0.0",
+    "drizzle-kit": "^0.31.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.8.3"
+  }
+}
