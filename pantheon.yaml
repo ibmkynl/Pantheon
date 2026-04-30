@@ -1,0 +1,24 @@
+ai:
+  provider: "anthropic"
+  api_key: "YOUR_API_KEY_HERE"
+  models:
+    router: "claude-haiku-4-5-20251001"
+    core: "claude-sonnet-4-6"
+    specialist: "claude-sonnet-4-6"
+    btw: "claude-haiku-4-5-20251001"
+
+mcp:
+  port: 3100
+  host: "localhost"
+
+orchestrator:
+  port: 3101
+  host: "localhost"
+
+limits:
+  max_tokens_per_session: 500000
+  max_revision_loops: 2
+  max_parallel_specialists: 3
+
+workspace:
+  base_path: "./workspaces"
