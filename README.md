@@ -7,7 +7,9 @@ A self-extending agentic OS. Bring your own API key, describe what you want in p
 Every agent communicates exclusively through MCP tools. No agent reads or writes files directly. No agent holds state in memory. All state lives in SQLite, accessed through 32 MCP tools. This eliminates hallucinations from file path errors and dramatically reduces context usage — agents call `file.write()` instead of dumping code into their response.
 
 ```
-User prompt → Understander → Classifier → Orchestrator
+User prompt → Understander → Classifier → Token-Estimator
+                                              ↓
+                                  Orchestrator (populates queue)
                                               ↓
                               Agent Queue (SQLite via MCP)
                                     ↙         ↘
@@ -26,55 +28,139 @@ User prompt → Understander → Classifier → Orchestrator
 | Language | TypeScript 5.x strict |
 | Package manager | pnpm workspaces |
 | Build | tsup |
-| AI gateway | LiteLLM (BYOK — any provider) |
+| AI gateway | Anthropic SDK (BYOK) |
 | MCP SDK | @modelcontextprotocol/sdk |
 | MCP transport | Streamable HTTP |
 | Validation | Zod |
 | HTTP server | Fastify |
 | Database | better-sqlite3 + drizzle-orm |
 | Memory search | SQLite FTS5 |
-| CLI | ink (React for terminals) |
+| CLI | commander (Phase 2–4) → ink/React (Phase 5+) |
 
-## Getting started
+## Setup
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm 9+
+- An Anthropic API key (or any LiteLLM-compatible provider)
+
+### Install
 
 ```bash
-# Clone and install
 git clone https://github.com/ibmkynl/Pantheon.git
 cd Pantheon
 pnpm install
+pnpm build
+```
 
-# Configure
-cp pantheon.yaml.example pantheon.yaml
-# Add your API key to pantheon.yaml
+### Configure
 
-# Start the MCP server
-pnpm start
+```bash
+cp pantheon.yaml.example pantheon.yaml   # or edit pantheon.yaml directly
+```
 
-# Verify
-curl http://localhost:3100/health
-# → {"status":"ok","tools":32}
+Edit `pantheon.yaml`:
+
+```yaml
+ai:
+  provider: "anthropic"
+  api_key: "sk-ant-..."          # your API key
+  models:
+    router:     "claude-haiku-4-5-20251001"   # cheap — router tier
+    core:       "claude-sonnet-4-6"           # smart — orchestrator/planner/reviewer
+    specialist: "claude-sonnet-4-6"           # smart — go-dev, sql-dev, etc.
+    btw:        "claude-haiku-4-5-20251001"   # cheap — simple questions
+```
+
+### Start
+
+**Terminal 1 — MCP server** (must start first):
+```bash
+pnpm start:mcp
+# Listening on http://localhost:3100
+# Verify: curl http://localhost:3100/health → {"status":"ok","tools":32}
+```
+
+**Terminal 2 — Orchestrator**:
+```bash
+pnpm start:orchestrator
+# Listening on http://localhost:3101
+```
+
+**Terminal 3 — CLI**:
+```bash
+# Link the CLI globally (optional)
+pnpm --filter @pantheon/cli link --global
+
+# Or run directly:
+node packages/cli/dist/index.js <command>
+```
+
+### Test it
+
+```bash
+# Check both servers
+pantheon status
+
+# Ask a simple question (routes to btw-agent)
+pantheon run --yes "What is the difference between JWT and session cookies?"
+
+# Run a full task (routes through orchestrator → specialists)
+pantheon run --yes "Build a REST API with JWT auth in Go"
+
+# Watch the queue live
+pantheon queue --watch
+
+# View logs
+pantheon logs --project <project-id>
+```
+
+## CLI commands
+
+```bash
+pantheon run "build a REST API with JWT auth in Go"   # full pipeline
+pantheon run "..." --yes                              # skip confirmation
+pantheon run "..." --agent go-dev                     # specific agent
+pantheon run "..." --project my-project               # named project
+
+pantheon queue                                        # snapshot of queue
+pantheon queue --watch                                # live auto-refresh
+pantheon worker start                                 # start queue worker
+pantheon worker stop                                  # stop queue worker
+
+pantheon status                                       # MCP + orchestrator health
+pantheon logs                                         # recent project logs
+pantheon logs --follow                                # tail mode
+pantheon logs --project <id>                          # filter by project
+
+pantheon agents list                                  # list all agents by tier
+pantheon forge                                        # create a new agent (Phase 7)
+
+pantheon budget set 200000                            # set token limit
+pantheon budget status                                # usage report
 ```
 
 ## Project structure
 
 ```
 pantheon/
-├── pantheon.yaml          ← config: API keys, model choices, limits
-├── pantheon.db            ← SQLite database (gitignored)
-├── agents/                ← agent system prompts (.md files)
-│   ├── router-tier/       ← understander, classifier, token-estimator
-│   ├── core-tier/         ← orchestrator, planner, reviewer, prometheus
-│   └── specialist-tier/   ← go-dev, sql-dev, flutter-dev, frontend-dev, ...
+├── pantheon.yaml              ← config: API keys, model choices, limits
+├── pantheon.db                ← SQLite database (gitignored)
+├── agents/                    ← agent system prompts (.md files)
+│   ├── router-tier/           ← understander, classifier, token-estimator
+│   ├── core-tier/             ← orchestrator, planner, reviewer, btw-agent, prometheus
+│   └── specialist-tier/       ← go-dev, sql-dev, frontend-dev, flutter-dev, ...
 └── packages/
-    ├── mcp-server/        ← @pantheon/mcp-server  (port 3100)
-    ├── orchestrator/      ← @pantheon/orchestrator (port 3101)
-    ├── cli/               ← @pantheon/cli → `pantheon` command
-    └── web/               ← @pantheon/web (Phase 8, future)
+    ├── mcp-server/            ← @pantheon/mcp-server  (port 3100)
+    ├── orchestrator/          ← @pantheon/orchestrator (port 3101)
+    ├── cli/                   ← @pantheon/cli → `pantheon` command
+    └── web/                   ← @pantheon/web (Phase 8)
 ```
 
 ## MCP tools (32 total)
 
-All agent state flows through these tools. Agents never touch the filesystem directly.
+All agent state flows through these tools.
 
 | Namespace | Tools |
 |---|---|
@@ -96,7 +182,7 @@ All agent state flows through these tools. Agents never touch the filesystem dir
 - `orchestrator` — decomposes task, builds dependency graph, populates queue
 - `planner` — writes detailed execution plan to MCP
 - `reviewer` — validates specialist output, scores 1-10, requests revision
-- `btw-agent` — handles simple questions with a single LLM call, no MCP
+- `btw-agent` — handles simple questions with a single LLM call
 - `prometheus` — creates new agents from user description (`pantheon forge`)
 
 **Specialist tier** (smart model, run in parallel across domains)
@@ -107,47 +193,17 @@ All agent state flows through these tools. Agents never touch the filesystem dir
 - `designer`, `researcher`
 - _...any agent you create with `pantheon forge`_
 
-## Queue system
-
-The agent queue is the heart of Pantheon. Same-domain agents are always sequential; different-domain agents run in parallel.
-
-```
-Position  Agent          Domain       DependsOn
-0         planner        general      []
-1         go-dev         go           [planner.id]
-2         sql-dev        sql          [planner.id]     ← parallel with go-dev
-3         go-reviewer    go-review    [go-dev.id]      ← waits for go-dev
-4         sql-reviewer   sql-review   [sql-dev.id]     ← waits for sql-dev
-```
-
-Queue state persists in SQLite — process restart resumes where it left off.
-
-## CLI
-
-```bash
-pantheon run "build a REST API with JWT auth in Go"   # run full pipeline
-pantheon run "..." --yes                              # skip confirmation
-pantheon forge                                        # create a new agent
-pantheon agents list                                  # show all agents
-pantheon queue                                        # live queue status
-pantheon status                                       # project + token usage
-pantheon logs                                         # tail live logs
-pantheon budget set 200000                            # set token limit
-```
-
 ## Adding your own agents
 
 Every agent is a `.md` system prompt file. No TypeScript required.
 
 ```bash
-# Interactive agent creator
+# Interactive agent creator (Phase 7)
 pantheon forge
 
 # Or manually: create agents/specialist-tier/rust-dev.md
-# and add the domain to pantheon.yaml
+# The runner will pick it up automatically on the next run.
 ```
-
-Prometheus (the agent creator agent) will interview you, generate the system prompt, write the file, and register the domain — all automatically.
 
 ## Adding external MCP servers / plugins
 
@@ -163,20 +219,27 @@ plugins:
     url: "http://localhost:3200/mcp"
 ```
 
-The orchestrator connects to each plugin at startup, discovers its tools, and makes them available to agents.
+## Build phases & development timeline
 
-## Build phases
+| Phase | Branch | Status | Description |
+|---|---|---|---|
+| 1 | `feat/phase-1` | ✅ Merged | MCP server — 32 tools, SQLite, SSE, Fastify |
+| 2 | `phase/2-agent-runner` | ✅ Merged | Orchestrator + agent runner + basic CLI + all agent prompts |
+| 3 | `phase/3-router` | ✅ Merged | Router tier: understander → classifier → token-estimator |
+| 4 | `phase/4-pipeline` | ✅ Merged | Full pipeline: route → orchestrate → queue → run |
+| 5 | `phase/5-ink-cli` | 🔜 Next | Ink/React CLI with live queue status and SSE streaming |
+| 6 | — | — | All specialists validated + parallel execution |
+| 7 | — | — | Prometheus agent creator (`pantheon forge`) |
+| 8 | — | — | Web dashboard (Next.js + shadcn/ui) |
 
-| Phase | Status | Description |
-|---|---|---|
-| 1 | ✅ Done | MCP server — 32 tools, SQLite, SSE, Fastify |
-| 2 | 🔜 Next | LiteLLM + agent runner |
-| 3 | — | Router + understander |
-| 4 | — | Orchestrator + single-domain pipeline |
-| 5 | — | CLI with live status (ink) |
-| 6 | — | All specialists + parallel execution |
-| 7 | — | Prometheus (agent creator) |
-| 8 | — | Web dashboard (Next.js + shadcn/ui) |
+## Contribution & merge rules
+
+- **One branch per phase.** Branches are named `phase/N-description`.
+- **PRs only after the phase is complete.** No draft PRs mid-phase.
+- **Review before merge.** Every PR is reviewed (self-review at minimum), issues fixed, and the PR re-pushed before merge.
+- **Squash merge only.** `main` history stays clean: one commit per phase.
+- **`main` is always deployable.** No broken builds on `main`.
+- Branch protection: 1 required approving review, stale review dismissal, no force-push, no deletion.
 
 ## Key invariants
 
