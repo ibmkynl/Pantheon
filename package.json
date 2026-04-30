@@ -8,8 +8,11 @@
   },
   "scripts": {
     "build": "pnpm -r build",
-    "dev": "pnpm --filter @pantheon/mcp-server dev",
+    "start:mcp": "pnpm --filter @pantheon/mcp-server start",
+    "start:orchestrator": "pnpm --filter @pantheon/orchestrator start",
     "start": "pnpm --filter @pantheon/mcp-server start",
+    "dev:mcp": "pnpm --filter @pantheon/mcp-server dev",
+    "dev:orchestrator": "pnpm --filter @pantheon/orchestrator dev",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
