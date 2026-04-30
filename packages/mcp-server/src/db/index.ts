@@ -46,7 +46,8 @@ export function initSchema(): void {
       project_id      TEXT,
       last_written_by TEXT,
       created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(path, project_id)
     );
 
     CREATE TABLE IF NOT EXISTS todos (

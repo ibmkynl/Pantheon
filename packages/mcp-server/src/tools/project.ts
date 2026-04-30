@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getDb } from '../db/index.js';
+import { getDb, getSqlite } from '../db/index.js';
 import { projects, projectLogs, tokenUsage, tokenBudget } from '../db/schema.js';
 
+// Pricing in USD per 1M tokens. Add new models here or configure via pantheon.yaml in a future phase.
 const COST_PER_M_TOKENS: Record<string, number> = {
   'claude-haiku-4-5-20251001': 0.80,
-  'claude-sonnet-4-6': 3.00,
+  'claude-sonnet-4-6':         3.00,
+  'claude-opus-4-7':          15.00,
 };
 
 function estimateCost(model: string | undefined, totalTokens: number): number {
@@ -177,13 +179,11 @@ export function registerProjectTools(server: McpServer): void {
         createdAt: new Date().toISOString(),
       });
 
-      const condition = projectId != null ? eq(tokenBudget.projectId, projectId) : isNull(tokenBudget.projectId);
-      const budget = await db.select().from(tokenBudget).where(condition).get();
-      if (budget) {
-        await db.update(tokenBudget)
-          .set({ usedTokens: budget.usedTokens + totalTokens, updatedAt: new Date().toISOString() })
-          .where(eq(tokenBudget.id, budget.id));
-      }
+      getSqlite().prepare(
+        `UPDATE token_budget SET used_tokens = used_tokens + ?, updated_at = ?
+         WHERE project_id IS ?`
+      ).run(totalTokens, new Date().toISOString(), projectId ?? null);
+
       return { content: [{ type: 'text' as const, text: JSON.stringify({ totalTokens, estimatedCost: cost }) }] };
     }
   );
