@@ -21,6 +21,14 @@ interface RouteResult {
   };
 }
 
+interface PipelineResult {
+  projectId:      string;
+  classification: string;
+  routeTo:        string;
+  output:         string;
+  agentsRun:      number;
+}
+
 async function confirm(msg: string): Promise<boolean> {
   process.stdout.write(msg);
   if (!process.stdin.isTTY) return false;
@@ -94,17 +102,19 @@ export async function cmdRun(
     if (!ok) { console.log('Aborted.'); return; }
   }
 
-  // For simple questions route to btw-agent directly
-  const agentName = route.routeTo === 'btw-agent' ? 'btw-agent' : route.routeTo;
-
-  console.log(`\n⟳  Running ${agentName}…\n`);
+  // Run the full pipeline (orchestrator will decompose + queue + run specialists)
+  console.log(`\n⟳  Running pipeline (project: ${route.projectId})…\n`);
   try {
-    const result = await post<RunResult>(orchestratorUrl('/run'), {
-      agentName,
-      task,
+    const result = await post<PipelineResult>(orchestratorUrl('/pipeline'), {
+      prompt:    task,
       projectId: route.projectId,
     });
-    printResult(result);
+    console.log('─'.repeat(60));
+    console.log(result.output);
+    console.log('─'.repeat(60));
+    console.log(`✓  Done — ${result.agentsRun} agents ran  |  project: ${result.projectId}`);
+    console.log(`   Files:  pantheon queue --project ${result.projectId}`);
+    console.log(`   Logs:   pantheon logs  --project ${result.projectId}`);
   } catch (err) {
     console.error('Error:', String(err));
     process.exit(1);
