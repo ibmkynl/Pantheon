@@ -22,3 +22,12 @@ limits:
 
 workspace:
   base_path: "./workspaces"
+
+# External MCP plugins (optional)
+# plugins:
+#   - name: "browser"
+#     transport: "stdio"
+#     command: "npx @playwright/mcp"
+#   - name: "github"
+#     transport: "http"
+#     url: "http://localhost:3200/mcp"
