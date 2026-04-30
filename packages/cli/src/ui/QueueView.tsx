@@ -52,7 +52,6 @@ export function QueueView({ projectId, pollMs = 2000 }: QueueViewProps) {
   const [rows, setRows]         = useState<QueueEntry[]>([]);
   const [workerOn, setWorkerOn] = useState(false);
   const [error, setError]       = useState<string | null>(null);
-  const [tick, setTick]         = useState(0);
 
   useInput((input) => {
     if (input === 'q' || input === '\x03') exit();
@@ -74,7 +73,7 @@ export function QueueView({ projectId, pollMs = 2000 }: QueueViewProps) {
     };
 
     void load();
-    const t = setInterval(() => { setTick(n => n + 1); void load(); }, pollMs);
+    const t = setInterval(() => { void load(); }, pollMs);
     return () => clearInterval(t);
   }, [projectId, pollMs]);
 

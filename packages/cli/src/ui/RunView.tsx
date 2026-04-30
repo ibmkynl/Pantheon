@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useApp } from 'ink';
+import { post } from '../http.js';
 import { orchestratorUrl } from '../config.js';
 
 interface SseEvent {
@@ -77,7 +78,6 @@ export function RunView({ projectId, task, onDone, onError }: RunViewProps) {
   useEffect(() => {
     const run = async () => {
       try {
-        const { post } = await import('../http.js');
         const result = await post<{ output: string; agentsRun: number; projectId: string }>(
           orchestratorUrl('/pipeline'),
           { prompt: task, projectId }
