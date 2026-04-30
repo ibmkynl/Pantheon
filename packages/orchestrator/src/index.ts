@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getConfig } from './config.js';
 import { runAgent } from './runner/agent-runner.js';
 import { runRouter } from './router/index.js';
+import { runPipeline } from './pipeline/index.js';
 import { startWorker, stopWorker, isWorkerRunning } from './runner/worker.js';
 import { getMcpClient, closeMcpClient } from './mcp/client.js';
 
@@ -28,6 +29,22 @@ app.post('/run', async (request, reply) => {
 
   try {
     const result = await runAgent(body);
+    reply.send(result);
+  } catch (err) {
+    reply.status(500).send({ error: String(err) });
+  }
+});
+
+// POST /pipeline — run the full pipeline end-to-end (route → orchestrate → run queue)
+app.post('/pipeline', async (request, reply) => {
+  const body = z.object({
+    prompt:    z.string().min(1),
+    projectId: z.string().optional(),
+    pollMs:    z.number().int().min(500).optional(),
+  }).parse(request.body);
+
+  try {
+    const result = await runPipeline(body);
     reply.send(result);
   } catch (err) {
     reply.status(500).send({ error: String(err) });

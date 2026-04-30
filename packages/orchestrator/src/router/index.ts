@@ -8,11 +8,11 @@ export interface RouterInput {
 }
 
 export interface RouterOutput {
-  projectId:      string;
-  classification: string;
-  routeTo:        string;
-  understood:     UnderstanderResult;
-  tokenDecision:  'approved' | 'blocked';
+  projectId:       string;
+  classification:  string;
+  routeTo:         string;
+  understood:      UnderstanderResult;
+  tokenDecision:   'approved' | 'blocked';
   estimatedTokens: number;
 }
 
