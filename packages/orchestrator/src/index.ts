@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { z } from 'zod';
 import { getConfig } from './config.js';
 import { runAgent } from './runner/agent-runner.js';
+import { runRouter } from './router/index.js';
 import { startWorker, stopWorker, isWorkerRunning } from './runner/worker.js';
 import { getMcpClient, closeMcpClient } from './mcp/client.js';
 
@@ -27,6 +28,21 @@ app.post('/run', async (request, reply) => {
 
   try {
     const result = await runAgent(body);
+    reply.send(result);
+  } catch (err) {
+    reply.status(500).send({ error: String(err) });
+  }
+});
+
+// POST /route — run the full router tier (understander → classifier → token-estimator)
+app.post('/route', async (request, reply) => {
+  const body = z.object({
+    prompt:    z.string().min(1),
+    projectId: z.string().optional(),
+  }).parse(request.body);
+
+  try {
+    const result = await runRouter(body);
     reply.send(result);
   } catch (err) {
     reply.status(500).send({ error: String(err) });
