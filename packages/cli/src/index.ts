@@ -5,6 +5,7 @@ import { cmdStatus } from './commands/status.js';
 import { cmdLogs } from './commands/logs.js';
 import { cmdBudgetSet, cmdBudgetStatus } from './commands/budget.js';
 import { cmdAgentsList } from './commands/agents.js';
+import { cmdValidate } from './commands/validate.js';
 
 const program = new Command();
 
@@ -76,5 +77,11 @@ agents
   .command('list')
   .description('List all registered agents')
   .action(() => cmdAgentsList());
+
+// pantheon validate
+program
+  .command('validate')
+  .description('Check that MCP server and orchestrator are healthy')
+  .action(() => { void cmdValidate(); });
 
 program.parse();
