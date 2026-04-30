@@ -1,3 +1,6 @@
+import React from 'react';
+import { render } from 'ink';
+import { LogsView } from '../ui/LogsView.js';
 import { orchestratorUrl } from '../config.js';
 import { post } from '../http.js';
 
@@ -18,26 +21,31 @@ const LEVEL_PREFIX: Record<string, string> = {
 };
 
 export async function cmdLogs(opts: { project?: string; limit?: number; follow?: boolean }) {
-  const show = async () => {
+  if (opts.follow) {
+    const { waitUntilExit } = render(
+      React.createElement(LogsView, {
+        projectId: opts.project,
+        limit:     opts.limit ?? 50,
+        pollMs:    2000,
+      })
+    );
+    await waitUntilExit();
+    return;
+  }
+
+  try {
     const result = await post<{ rows: LogRow[] }>(orchestratorUrl('/logs'), {
       projectId: opts.project,
       limit:     opts.limit ?? 50,
     });
 
-    if (!opts.follow) console.clear();
     for (const r of result.rows.reverse()) {
       const ts     = r.createdAt.slice(11, 19);
       const prefix = LEVEL_PREFIX[r.level] ?? r.level;
       const agent  = r.agentName ? `\x1b[90m[${r.agentName}]\x1b[0m ` : '';
       console.log(`${ts} ${prefix}${agent}${r.message}`);
     }
-  };
-
-  await show();
-
-  if (opts.follow) {
-    const interval = setInterval(() => { void show(); }, 2000);
-    process.on('SIGINT', () => { clearInterval(interval); process.exit(0); });
-    await new Promise(() => { /* run until ctrl-c */ });
+  } catch (err) {
+    console.error('Error:', String(err));
   }
 }

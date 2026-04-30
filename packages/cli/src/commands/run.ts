@@ -1,3 +1,6 @@
+import React from 'react';
+import { render } from 'ink';
+import { RunView } from '../ui/RunView.js';
 import { orchestratorUrl } from '../config.js';
 import { post } from '../http.js';
 
@@ -19,14 +22,6 @@ interface RouteResult {
     tech_stack:  string[];
     ambiguities: string[];
   };
-}
-
-interface PipelineResult {
-  projectId:      string;
-  classification: string;
-  routeTo:        string;
-  output:         string;
-  agentsRun:      number;
 }
 
 async function confirm(msg: string): Promise<boolean> {
@@ -52,7 +47,7 @@ export async function cmdRun(
   task: string,
   opts: { agent?: string; project?: string; yes?: boolean }
 ) {
-  // If a specific agent is requested, bypass the router
+  // Direct agent invocation (bypasses router)
   if (opts.agent && opts.agent !== 'orchestrator') {
     if (!opts.yes) {
       const ok = await confirm(`\nAgent: ${opts.agent}\nTask:  ${task}\n\nRun? [y/N] `);
@@ -68,7 +63,7 @@ export async function cmdRun(
     return;
   }
 
-  // Default: run the router tier first to understand + classify the request
+  // Router tier: understand + classify first
   console.log('\n⟳  Analysing request…\n');
   let route: RouteResult;
   try {
@@ -102,23 +97,52 @@ export async function cmdRun(
     if (!ok) { console.log('Aborted.'); return; }
   }
 
-  // Run the full pipeline (orchestrator will decompose + queue + run specialists)
-  console.log(`\n⟳  Running pipeline (project: ${route.projectId})…\n`);
-  try {
-    const result = await post<PipelineResult>(orchestratorUrl('/pipeline'), {
-      prompt:    task,
+  // btw-agent: single synchronous LLM call, no live view needed
+  if (route.routeTo === 'btw-agent') {
+    console.log('\n⟳  Answering…\n');
+    try {
+      const result = await post<{ output: string; agentsRun: number }>(
+        orchestratorUrl('/pipeline'),
+        { prompt: task, projectId: route.projectId }
+      );
+      console.log('─'.repeat(60));
+      console.log(result.output);
+      console.log('─'.repeat(60));
+      console.log(`✓  Done  |  project: ${route.projectId}`);
+    } catch (err) {
+      console.error('Error:', String(err));
+      process.exit(1);
+    }
+    return;
+  }
+
+  // Full task pipeline: show live RunView with SSE events
+  let finalOutput = '';
+  let finalAgents = 0;
+  let runError    = '';
+
+  const { waitUntilExit } = render(
+    React.createElement(RunView, {
       projectId: route.projectId,
-    });
-    console.log('─'.repeat(60));
-    console.log(result.output);
-    console.log('─'.repeat(60));
-    console.log(`✓  Done — ${result.agentsRun} agents ran  |  project: ${result.projectId}`);
-    console.log(`   Files:  pantheon queue --project ${result.projectId}`);
-    console.log(`   Logs:   pantheon logs  --project ${result.projectId}`);
-  } catch (err) {
-    console.error('Error:', String(err));
+      task,
+      onDone: (output, agentsRun) => { finalOutput = output; finalAgents = agentsRun; },
+      onError: (err) => { runError = err; },
+    })
+  );
+
+  await waitUntilExit();
+
+  if (runError) {
+    console.error('\n✗ Error:', runError);
     process.exit(1);
   }
+
+  console.log('\n' + '─'.repeat(60));
+  if (finalOutput) console.log(finalOutput);
+  console.log('─'.repeat(60));
+  console.log(`✓  Done — ${finalAgents} agents ran  |  project: ${route.projectId}`);
+  console.log(`   Files:  pantheon queue --project ${route.projectId}`);
+  console.log(`   Logs:   pantheon logs  --project ${route.projectId}`);
 }
 
 function printResult(result: RunResult) {
