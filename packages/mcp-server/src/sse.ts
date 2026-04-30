@@ -22,6 +22,10 @@ export class SseEmitter {
   emit(event: SseEvent): void {
     const payload = `data: ${JSON.stringify(event)}\n\n`;
     for (const client of this.clients) {
+      if (client.raw.destroyed) {
+        this.clients.delete(client);
+        continue;
+      }
       try {
         client.raw.write(payload);
       } catch {

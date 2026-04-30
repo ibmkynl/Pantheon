@@ -65,9 +65,12 @@ export function registerTodoTools(server: McpServer): void {
         projectId: z.string().optional(),
       },
     },
-    async ({ id, fields }) => {
+    async ({ id, fields, projectId }) => {
       const db = getDb();
-      await db.update(todos).set(fields).where(eq(todos.id, id));
+      const condition = projectId != null
+        ? and(eq(todos.id, id), eq(todos.projectId, projectId))
+        : and(eq(todos.id, id), isNull(todos.projectId));
+      await db.update(todos).set(fields).where(condition);
       return { content: [{ type: 'text' as const, text: `Updated todo ${id}` }] };
     }
   );
