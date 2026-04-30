@@ -7,8 +7,7 @@ import { getMcpClient } from '../mcp/client.js';
 import { getConfig } from '../config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// dist/index.js → 4 levels up to repo root
-// dist/index.js → 3 levels up to repo root, then into agents/
+// packages/orchestrator/dist/index.js → 3 levels up = repo root
 const AGENTS_DIR = path.resolve(__dirname, '../../../agents');
 const TIERS = ['router-tier', 'core-tier', 'specialist-tier'];
 
