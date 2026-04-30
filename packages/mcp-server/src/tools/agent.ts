@@ -21,25 +21,26 @@ export function registerAgentTools(server: McpServer, sseEmitter: SseEmitter): v
     },
     async ({ agentName, domain, task, dependsOn, projectId }) => {
       const sqlite = getSqlite();
-      const posRow = sqlite.prepare(`
-        SELECT COALESCE(MAX(position), 0) + 1 as next_pos
-        FROM agent_queue
-        WHERE project_id IS ?
-      `).get(projectId ?? null) as { next_pos: number };
-
       const id = uuidv4();
-      const position = posRow.next_pos;
       const dependsOnStr = dependsOn && dependsOn.length > 0 ? dependsOn.join(',') : null;
+      const now = new Date().toISOString();
 
-      const db = getDb();
-      await db.insert(agentQueue).values({
-        id, agentName, domain, task,
-        status: 'queued',
-        dependsOn: dependsOnStr,
-        projectId: projectId ?? null,
-        position,
-        createdAt: new Date().toISOString(),
+      const insert = sqlite.transaction(() => {
+        const posRow = sqlite.prepare(`
+          SELECT COALESCE(MAX(position), 0) + 1 as next_pos
+          FROM agent_queue WHERE project_id IS ?
+        `).get(projectId ?? null) as { next_pos: number };
+
+        sqlite.prepare(`
+          INSERT INTO agent_queue
+            (id, agent_name, domain, task, status, depends_on, project_id, position, created_at)
+          VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)
+        `).run(id, agentName, domain, task, dependsOnStr, projectId ?? null, posRow.next_pos, now);
+
+        return posRow.next_pos;
       });
+
+      const position = insert();
       return { content: [{ type: 'text' as const, text: JSON.stringify({ id, position }) }] };
     }
   );
@@ -55,45 +56,51 @@ export function registerAgentTools(server: McpServer, sseEmitter: SseEmitter): v
     async ({ projectId }) => {
       const sqlite = getSqlite();
 
-      // All queued entries for this project, ordered by position
-      const queued = sqlite.prepare(`
-        SELECT id, agent_name, domain, task, depends_on
-        FROM agent_queue
-        WHERE status = 'queued'
-          AND (? IS NULL OR project_id = ?)
-        ORDER BY position ASC
-      `).all(projectId ?? null, projectId ?? null) as Array<{
-        id: string; agent_name: string; domain: string; task: string; depends_on: string | null;
-      }>;
+      const resolve = sqlite.transaction(() => {
+        const queued = sqlite.prepare(`
+          SELECT id, agent_name, domain, task, depends_on
+          FROM agent_queue
+          WHERE status = 'queued'
+            AND (? IS NULL OR project_id = ?)
+          ORDER BY position ASC
+        `).all(projectId ?? null, projectId ?? null) as Array<{
+          id: string; agent_name: string; domain: string; task: string; depends_on: string | null;
+        }>;
 
-      // Domains currently running
-      const runningDomains = sqlite.prepare(`
-        SELECT DISTINCT domain FROM agent_queue
-        WHERE status = 'running'
-          AND (? IS NULL OR project_id = ?)
-      `).all(projectId ?? null, projectId ?? null) as Array<{ domain: string }>;
-      const runningDomainSet = new Set(runningDomains.map(r => r.domain));
+        const runningDomains = sqlite.prepare(`
+          SELECT DISTINCT domain FROM agent_queue
+          WHERE status = 'running'
+            AND (? IS NULL OR project_id = ?)
+        `).all(projectId ?? null, projectId ?? null) as Array<{ domain: string }>;
+        const runningDomainSet = new Set(runningDomains.map(r => r.domain));
 
-      // IDs that are done
-      const doneIds = sqlite.prepare(`
-        SELECT id FROM agent_queue WHERE status = 'done'
-          AND (? IS NULL OR project_id = ?)
-      `).all(projectId ?? null, projectId ?? null) as Array<{ id: string }>;
-      const doneIdSet = new Set(doneIds.map(r => r.id));
+        const doneIds = sqlite.prepare(`
+          SELECT id FROM agent_queue WHERE status = 'done'
+            AND (? IS NULL OR project_id = ?)
+        `).all(projectId ?? null, projectId ?? null) as Array<{ id: string }>;
+        const doneIdSet = new Set(doneIds.map(r => r.id));
 
-      const ready: Array<{ id: string; agentName: string; domain: string; task: string }> = [];
+        const ready: Array<{ id: string; agentName: string; domain: string; task: string }> = [];
+        const markRunning = sqlite.prepare(
+          `UPDATE agent_queue SET status = 'running', started_at = ? WHERE id = ?`
+        );
+        const now = new Date().toISOString();
 
-      for (const item of queued) {
-        if (item.depends_on) {
-          const deps = item.depends_on.split(',').map(s => s.trim()).filter(Boolean);
-          if (!deps.every(dep => doneIdSet.has(dep))) continue;
+        for (const item of queued) {
+          if (item.depends_on) {
+            const deps = item.depends_on.split(',').map(s => s.trim()).filter(Boolean);
+            if (!deps.every(dep => doneIdSet.has(dep))) continue;
+          }
+          if (runningDomainSet.has(item.domain)) continue;
+          markRunning.run(now, item.id);
+          ready.push({ id: item.id, agentName: item.agent_name, domain: item.domain, task: item.task });
+          runningDomainSet.add(item.domain);
         }
-        if (runningDomainSet.has(item.domain)) continue;
-        ready.push({ id: item.id, agentName: item.agent_name, domain: item.domain, task: item.task });
-        // Claim domain for this batch so we don't return two agents from the same domain
-        runningDomainSet.add(item.domain);
-      }
 
+        return ready;
+      });
+
+      const ready = resolve();
       return { content: [{ type: 'text' as const, text: JSON.stringify({ ready }) }] };
     }
   );

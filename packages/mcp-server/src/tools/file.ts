@@ -2,10 +2,8 @@ import { z } from 'zod';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { eq, and, isNull } from 'drizzle-orm';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getDb } from '../db/index.js';
-import { files } from '../db/schema.js';
+import { getSqlite } from '../db/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // workspaces/ lives at repo root — tsup bundles everything to dist/index.js,
@@ -38,18 +36,14 @@ export function registerFileTools(server: McpServer): void {
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
       await fs.writeFile(fullPath, content, 'utf-8');
 
-      const db = getDb();
       const now = new Date().toISOString();
-      const condition = projectId != null
-        ? and(eq(files.path, filePath), eq(files.projectId, projectId))
-        : and(eq(files.path, filePath), isNull(files.projectId));
-      const existing = await db.select().from(files).where(condition).get();
-
-      if (existing) {
-        await db.update(files).set({ lastWrittenBy: agentName, updatedAt: now }).where(eq(files.id, existing.id));
-      } else {
-        await db.insert(files).values({ path: filePath, projectId: projectId ?? null, lastWrittenBy: agentName, createdAt: now, updatedAt: now });
-      }
+      getSqlite().prepare(`
+        INSERT INTO files (path, project_id, last_written_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(path, project_id) DO UPDATE SET
+          last_written_by = excluded.last_written_by,
+          updated_at      = excluded.updated_at
+      `).run(filePath, projectId ?? null, agentName, now, now);
       return { content: [{ type: 'text' as const, text: `Written ${filePath}` }] };
     }
   );
@@ -111,12 +105,10 @@ export function registerFileTools(server: McpServer): void {
     },
     async ({ path: filePath, projectId }) => {
       const fullPath = sandboxPath(filePath, projectId);
+      getSqlite().prepare(
+        `DELETE FROM files WHERE path = ? AND project_id IS ?`
+      ).run(filePath, projectId ?? null);
       await fs.unlink(fullPath);
-      const db = getDb();
-      const condition = projectId != null
-        ? and(eq(files.path, filePath), eq(files.projectId, projectId))
-        : and(eq(files.path, filePath), isNull(files.projectId));
-      await db.delete(files).where(condition);
       return { content: [{ type: 'text' as const, text: `Deleted ${filePath}` }] };
     }
   );

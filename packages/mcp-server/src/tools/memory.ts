@@ -99,7 +99,10 @@ export function registerMemoryTools(server: McpServer): void {
     async ({ tag, projectId }) => {
       const db = getDb();
       const conditions = [];
-      if (tag) conditions.push(like(memory.tags, `%${tag}%`));
+      if (tag) {
+        const escaped = tag.replace(/[%_\\]/g, '\\$&');
+        conditions.push(like(memory.tags, `%${escaped}%`, '\\'));
+      }
       if (projectId != null) conditions.push(eq(memory.projectId, projectId));
       else conditions.push(isNull(memory.projectId));
 
