@@ -1,4 +1,4 @@
-import { getMcpClient } from '../mcp/client.js';
+import { getMcpClient, resetMcpClient } from '../mcp/client.js';
 import { getConfig } from '../config.js';
 import { runAgent } from './agent-runner.js';
 
@@ -93,6 +93,8 @@ export async function startWorker(projectId?: string, pollMs = 2000): Promise<vo
       }
     } catch (err) {
       console.error('[worker] poll error:', err);
+      // Reset MCP client so the next poll attempt reconnects
+      resetMcpClient();
     }
 
     await new Promise<void>(resolve => setTimeout(resolve, pollMs));

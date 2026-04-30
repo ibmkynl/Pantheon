@@ -43,7 +43,10 @@ export function cmdAgentsList() {
     return;
   }
 
-  const byTier = Object.groupBy(agents, a => a.tier);
+  const byTier = agents.reduce<Record<string, AgentInfo[]>>((acc, a) => {
+    (acc[a.tier] ??= []).push(a);
+    return acc;
+  }, {});
 
   for (const tier of TIERS) {
     const list = byTier[tier];

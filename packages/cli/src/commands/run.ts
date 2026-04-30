@@ -14,25 +14,33 @@ export async function cmdRun(
   const agentName = opts.agent ?? 'orchestrator';
 
   if (!opts.yes) {
-    process.stdout.write(
-      `\nAgent: ${agentName}\nTask:  ${task}\n\nRun? [y/N] `
-    );
+    process.stdout.write(`\nAgent: ${agentName}\nTask:  ${task}\n\nRun? [y/N] `);
+
     const answer = await new Promise<string>(resolve => {
+      if (!process.stdin.isTTY) {
+        // Non-interactive — default deny to prevent accidental runs
+        resolve('n');
+        return;
+      }
       let buf = '';
-      process.stdin.setRawMode?.(true);
+      process.stdin.setRawMode(true);
       process.stdin.resume();
       process.stdin.setEncoding('utf8');
-      process.stdin.on('data', (ch: string) => {
+      const onData = (ch: string) => {
         buf += ch;
-        if (ch === '\r' || ch === '\n' || ch === 'y' || ch === 'n' || ch === 'N') {
-          process.stdin.setRawMode?.(false);
+        if ('\r\n'.includes(ch) || 'yn'.includes(ch.toLowerCase())) {
+          process.stdin.setRawMode(false);
           process.stdin.pause();
+          process.stdin.off('data', onData);
+          process.stdout.write('\n');
           resolve(buf.trim().toLowerCase());
         }
-      });
+      };
+      process.stdin.on('data', onData);
     });
+
     if (answer !== 'y') {
-      console.log('\nAborted.');
+      console.log('Aborted.');
       return;
     }
   }

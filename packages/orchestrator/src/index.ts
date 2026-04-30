@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getConfig } from './config.js';
 import { runAgent } from './runner/agent-runner.js';
 import { startWorker, stopWorker, isWorkerRunning } from './runner/worker.js';
-import { closeMcpClient } from './mcp/client.js';
+import { getMcpClient, closeMcpClient } from './mcp/client.js';
 
 const config = getConfig();
 const PORT   = Number(process.env['ORCHESTRATOR_PORT'] ?? config.orchestrator.port);
@@ -65,7 +65,7 @@ app.get('/worker/status', async (_request, reply) => {
 // POST /queue — proxy to MCP agent.queue_status
 app.post('/queue', async (request, reply) => {
   const body = z.object({ projectId: z.string().optional() }).parse(request.body ?? {});
-  const mcp  = await import('./mcp/client.js').then(m => m.getMcpClient());
+  const mcp  = await getMcpClient();
   const res  = await mcp.callTool({ name: 'agent.queue_status', arguments: { projectId: body.projectId } });
   const text = (res.content as Array<{ type: string; text?: string }>).find(c => c.type === 'text')?.text ?? '[]';
   reply.send({ rows: JSON.parse(text) });
@@ -74,7 +74,7 @@ app.post('/queue', async (request, reply) => {
 // POST /logs — proxy to MCP project.get_logs
 app.post('/logs', async (request, reply) => {
   const body = z.object({ projectId: z.string().optional(), limit: z.number().optional() }).parse(request.body ?? {});
-  const mcp  = await import('./mcp/client.js').then(m => m.getMcpClient());
+  const mcp  = await getMcpClient();
   const res  = await mcp.callTool({ name: 'project.get_logs', arguments: { projectId: body.projectId, limit: body.limit } });
   const text = (res.content as Array<{ type: string; text?: string }>).find(c => c.type === 'text')?.text ?? '[]';
   reply.send({ rows: JSON.parse(text) });
@@ -83,7 +83,7 @@ app.post('/logs', async (request, reply) => {
 // POST /budget — proxy to MCP token.check_budget
 app.post('/budget', async (request, reply) => {
   const body = z.object({ projectId: z.string().optional() }).parse(request.body ?? {});
-  const mcp  = await import('./mcp/client.js').then(m => m.getMcpClient());
+  const mcp  = await getMcpClient();
   const res  = await mcp.callTool({ name: 'token.check_budget', arguments: { projectId: body.projectId } });
   const text = (res.content as Array<{ type: string; text?: string }>).find(c => c.type === 'text')?.text ?? '{}';
   reply.send(JSON.parse(text));
@@ -92,7 +92,7 @@ app.post('/budget', async (request, reply) => {
 // POST /budget/set — proxy to MCP token.set_limit
 app.post('/budget/set', async (request, reply) => {
   const body = z.object({ limitTokens: z.number().int().min(1), projectId: z.string().optional() }).parse(request.body);
-  const mcp  = await import('./mcp/client.js').then(m => m.getMcpClient());
+  const mcp  = await getMcpClient();
   await mcp.callTool({ name: 'token.set_limit', arguments: { limitTokens: body.limitTokens, projectId: body.projectId } });
   reply.send({ ok: true });
 });
