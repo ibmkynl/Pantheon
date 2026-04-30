@@ -135,6 +135,7 @@ pantheon logs --follow                                # tail mode
 pantheon logs --project <id>                          # filter by project
 
 pantheon agents list                                  # list all agents by tier
+pantheon validate                                     # health check — MCP + orchestrator
 pantheon forge                                        # create a new agent (Phase 7)
 
 pantheon budget set 200000                            # set token limit
@@ -188,8 +189,10 @@ All agent state flows through these tools.
 **Specialist tier** (smart model, run in parallel across domains)
 - `go-dev`, `go-reviewer`
 - `sql-dev`, `sql-reviewer`
-- `flutter-dev`, `flutter-reviewer`
 - `frontend-dev`, `frontend-reviewer`
+- `flutter-dev`, `flutter-reviewer`
+- `python-dev`, `python-reviewer`
+- `rust-dev`, `rust-reviewer`
 - `designer`, `researcher`
 - _...any agent you create with `pantheon forge`_
 
@@ -227,8 +230,8 @@ plugins:
 | 2 | `phase/2-agent-runner` | ✅ Merged | Orchestrator + agent runner + basic CLI + all agent prompts |
 | 3 | `phase/3-router` | ✅ Merged | Router tier: understander → classifier → token-estimator |
 | 4 | `phase/4-pipeline` | ✅ Merged | Full pipeline: route → orchestrate → queue → run |
-| 5 | `phase/5-ink-cli` | 🔜 Next | Ink/React CLI with live queue status and SSE streaming |
-| 6 | — | — | All specialists validated + parallel execution |
+| 5 | `phase/5-ink-cli` | ✅ Merged | Ink/React CLI — live QueueView, LogsView, RunView |
+| 6 | `phase/6-specialists-parallel` | 🔜 Next | Queue-manager agent, python/rust specialists, CI workflow |
 | 7 | — | — | Prometheus agent creator (`pantheon forge`) |
 | 8 | — | — | Web dashboard (Next.js + shadcn/ui) |
 

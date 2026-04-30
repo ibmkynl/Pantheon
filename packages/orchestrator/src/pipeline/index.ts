@@ -92,6 +92,13 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineOutput>
     projectId: route.projectId,
   });
 
+  // 2b. Run queue-manager to optimize ordering before the worker starts
+  await runAgent({
+    agentName: 'queue-manager',
+    task:      `Review and optimize the agent queue for project ${route.projectId}. Maximize parallelism while respecting all dependency constraints.`,
+    projectId: route.projectId,
+  });
+
   // 3. Start worker for this project if not already running
   const workerWasRunning = isWorkerRunning();
   if (!workerWasRunning) {

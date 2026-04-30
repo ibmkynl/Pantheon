@@ -7,10 +7,17 @@ import { getMcpClient } from '../mcp/client.js';
 import { getConfig } from '../config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// dist/index.js → 4 levels up to repo root
-// dist/index.js → 3 levels up to repo root, then into agents/
+// packages/orchestrator/dist/index.js → 3 levels up = repo root
 const AGENTS_DIR = path.resolve(__dirname, '../../../agents');
 const TIERS = ['router-tier', 'core-tier', 'specialist-tier'];
+
+function extractText(blocks: unknown[]): string {
+  return blocks
+    .filter((b): b is { type: string; text: string } => typeof b === 'object' && b !== null && (b as Record<string, unknown>)['type'] === 'text')
+    .map(b => b.text)
+    .join('\n')
+    .trim();
+}
 
 async function findAgent(agentName: string): Promise<{ prompt: string; tier: string }> {
   for (const tier of TIERS) {
@@ -85,19 +92,14 @@ export async function runAgent({
     messages.push({ role: 'assistant', content: response.content });
 
     if (response.stop_reason === 'end_turn') {
-      const output = response.content
-        .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-        .map(b => b.text)
-        .join('\n')
-        .trim();
+      const output = extractText(response.content);
       return { output, iterations, toolCallCount };
     }
 
     if (response.stop_reason === 'tool_use') {
-      const toolUseBlocks = response.content.filter(
-        (b): b is { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> } =>
-          b.type === 'tool_use'
-      );
+      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use') as Array<
+        { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+      >;
 
       const toolResults: ToolResultBlockParam[] = await Promise.all(
         toolUseBlocks.map(async block => {
@@ -128,13 +130,8 @@ export async function runAgent({
     break;
   }
 
-  const lastMsg = messages.findLast(m => m.role === 'assistant');
-  const output  = Array.isArray(lastMsg?.content)
-    ? lastMsg.content
-        .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-        .map(b => b.text)
-        .join('\n')
-        .trim()
-    : '';
+  const lastMsg = messages.findLast((m: { role: string }) => m.role === 'assistant') as
+    { role: string; content: unknown } | undefined;
+  const output  = Array.isArray(lastMsg?.content) ? extractText(lastMsg.content as unknown[]) : '';
   return { output, iterations, toolCallCount };
 }

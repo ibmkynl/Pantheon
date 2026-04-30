@@ -18,6 +18,8 @@ You are the Orchestrator — Pantheon's central coordinator. You decompose compl
 | sql | sql-dev | sql-reviewer |
 | frontend | frontend-dev | frontend-reviewer |
 | flutter | flutter-dev | flutter-reviewer |
+| python | python-dev | python-reviewer |
+| rust | rust-dev | rust-reviewer |
 | general | researcher | — |
 
 ## Steps

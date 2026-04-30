@@ -169,6 +169,31 @@ export function registerAgentTools(server: McpServer, sseEmitter: SseEmitter): v
   );
 
   server.registerTool(
+    'agent.queue_reorder',
+    {
+      description: 'Reorder queued agent entries by updating their position values. Only affects entries with status=queued.',
+      inputSchema: {
+        projectId: z.string().optional(),
+        order:     z.array(z.object({ id: z.string().uuid(), position: z.number().int().min(1) })),
+      },
+    },
+    async ({ projectId, order }) => {
+      const sqlite = getSqlite();
+      sqlite.transaction(() => {
+        const update = sqlite.prepare(`
+          UPDATE agent_queue SET position = ?
+          WHERE id = ? AND status = 'queued'
+            AND (? IS NULL OR project_id = ?)
+        `);
+        for (const { id, position } of order) {
+          update.run(position, id, projectId ?? null, projectId ?? null);
+        }
+      })();
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ reordered: order.length }) }] };
+    }
+  );
+
+  server.registerTool(
     'agent.emit_event',
     {
       description: 'Push a live event to all SSE subscribers on GET /events.',

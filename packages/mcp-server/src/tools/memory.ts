@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, isNull, like } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getDb, getSqlite } from '../db/index.js';
 import { memory } from '../db/schema.js';
@@ -101,7 +101,7 @@ export function registerMemoryTools(server: McpServer): void {
       const conditions = [];
       if (tag) {
         const escaped = tag.replace(/[%_\\]/g, '\\$&');
-        conditions.push(like(memory.tags, `%${escaped}%`, '\\'));
+        conditions.push(sql`${memory.tags} LIKE ${'%' + escaped + '%'} ESCAPE '\\'`);
       }
       if (projectId != null) conditions.push(eq(memory.projectId, projectId));
       else conditions.push(isNull(memory.projectId));
