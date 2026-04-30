@@ -8,7 +8,8 @@ import { getConfig } from '../config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // dist/index.js → 4 levels up to repo root
-const AGENTS_DIR = path.resolve(__dirname, '../../../../agents');
+// dist/index.js → 3 levels up to repo root, then into agents/
+const AGENTS_DIR = path.resolve(__dirname, '../../../agents');
 const TIERS = ['router-tier', 'core-tier', 'specialist-tier'];
 
 async function findAgent(agentName: string): Promise<{ prompt: string; tier: string }> {
