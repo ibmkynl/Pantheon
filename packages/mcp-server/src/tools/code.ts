@@ -106,7 +106,7 @@ function extractGo(lines: string[]): { symbols: RawSymbol[]; refs: RawRef[] } {
   const funcRe    = /^func\s+(?:\(\s*\w+\s+\*?\w+\s*\)\s+)?(\w+)\s*\(/;
   const typeRe    = /^type\s+(\w+)\s+(struct|interface)/;
   const constRe   = /^(?:const|var)\s+(\w+)\s/;
-  const importRe  = /^\s+"([^"]+)"/;
+  const importRe  = /^"([^"]+)"/;   // applied to trimmed line, so no leading whitespace
   const importSingle = /^import\s+"([^"]+)"/;
 
   let inImportBlock = false;
@@ -233,10 +233,11 @@ function extractSymbols(filePath: string, lang: string, lines: string[]): { symb
 
 function upsertFileIndex(sqlite: ReturnType<typeof getSqlite>, filePath: string, projectId: string | null, lang: string | null, symbols: RawSymbol[], refs: RawRef[]): { symbolsWritten: number; refsWritten: number } {
   const now = new Date().toISOString();
+  const fileDir = path.dirname(filePath);
 
-  // Remove existing index for this file
-  sqlite.prepare(`DELETE FROM code_refs WHERE from_file = ? AND (? IS NULL OR project_id = ?)`).run(filePath, projectId, projectId);
-  sqlite.prepare(`DELETE FROM code_symbols WHERE file_path = ? AND (? IS NULL OR project_id = ?)`).run(filePath, projectId, projectId);
+  // Use IS for NULL-safe project scoping — (? IS NULL OR ...) would wipe all projects when null
+  sqlite.prepare(`DELETE FROM code_refs    WHERE from_file = ? AND project_id IS ?`).run(filePath, projectId);
+  sqlite.prepare(`DELETE FROM code_symbols WHERE file_path = ? AND project_id IS ?`).run(filePath, projectId);
 
   const insertSym = sqlite.prepare(`
     INSERT INTO code_symbols (project_id, file_path, name, kind, language, line_start, line_end, signature, created_at, updated_at)
@@ -252,7 +253,11 @@ function upsertFileIndex(sqlite: ReturnType<typeof getSqlite>, filePath: string,
       insertSym.run(projectId, filePath, s.name, s.kind, lang, s.lineStart, s.lineEnd ?? null, s.signature ?? null, now, now);
     }
     for (const r of refs) {
-      insertRef.run(projectId, filePath, r.toSymbol, r.toFile ?? null, r.kind, r.line, now);
+      // Resolve relative imports to absolute paths so get_graph reverse lookup works
+      const absToFile = r.toFile
+        ? (r.toFile.startsWith('.') ? path.resolve(fileDir, r.toFile) : r.toFile)
+        : null;
+      insertRef.run(projectId, filePath, r.toSymbol, absToFile, r.kind, r.line, now);
     }
   });
   write();
@@ -314,7 +319,7 @@ export function registerCodeTools(server: McpServer): void {
         const full = path.join(cur, e.name);
         if (e.isDirectory()) { queue.push(full); }
         else if (e.isFile() && allowed.has(path.extname(e.name).toLowerCase())) {
-          filesToProcess.push(full);
+          if (filesToProcess.length < maxFiles) filesToProcess.push(full);
         }
       }
     }
@@ -373,8 +378,8 @@ export function registerCodeTools(server: McpServer): void {
     const rows = sqlite.prepare(`
       SELECT from_file, line, kind, to_file FROM code_refs
       WHERE to_symbol = ? AND (? IS NULL OR project_id = ?)
-      ORDER FROM from_file LIMIT ?
-    `.replace('ORDER FROM', 'ORDER BY')).all(symbolName, projectId ?? null, projectId ?? null, limit) as Array<{ from_file: string; line: number | null; kind: string; to_file: string | null }>;
+      ORDER BY from_file LIMIT ?
+    `).all(symbolName, projectId ?? null, projectId ?? null, limit) as Array<{ from_file: string; line: number | null; kind: string; to_file: string | null }>;
     return { content: [{ type: 'text' as const, text: JSON.stringify(rows.map(r => ({ file: r.from_file, line: r.line, kind: r.kind, resolvedFrom: r.to_file }))) }] };
   });
 
@@ -431,10 +436,13 @@ export function registerCodeTools(server: McpServer): void {
       WHERE from_file = ? AND kind = 'import' AND (? IS NULL OR project_id = ?)
     `).all(filePath, projectId ?? null, projectId ?? null) as Array<{ to_symbol: string; to_file: string | null }>;
 
+    // to_file stores absolute paths; imports may omit the extension (e.g. './db/index' → '/abs/db/index')
+    // so match both the exact path and the path without its extension
+    const filePathNoExt = filePath.replace(/\.(ts|tsx|js|jsx|mjs|cjs|go|py|rs)$/, '');
     const importedBy = sqlite.prepare(`
       SELECT DISTINCT from_file FROM code_refs
-      WHERE to_file = ? AND kind = 'import' AND (? IS NULL OR project_id = ?)
-    `).all(filePath, projectId ?? null, projectId ?? null) as Array<{ from_file: string }>;
+      WHERE (to_file = ? OR to_file = ?) AND kind = 'import' AND (? IS NULL OR project_id = ?)
+    `).all(filePath, filePathNoExt, projectId ?? null, projectId ?? null) as Array<{ from_file: string }>;
 
     return { content: [{ type: 'text' as const, text: JSON.stringify({
       file: filePath,
@@ -452,8 +460,8 @@ export function registerCodeTools(server: McpServer): void {
     },
   }, async ({ filePath, projectId }) => {
     const sqlite = getSqlite();
-    const syms = sqlite.prepare(`DELETE FROM code_symbols WHERE file_path = ? AND (? IS NULL OR project_id = ?)`).run(filePath, projectId ?? null, projectId ?? null);
-    const refs = sqlite.prepare(`DELETE FROM code_refs WHERE from_file = ? AND (? IS NULL OR project_id = ?)`).run(filePath, projectId ?? null, projectId ?? null);
+    const syms = sqlite.prepare(`DELETE FROM code_symbols WHERE file_path = ? AND project_id IS ?`).run(filePath, projectId ?? null);
+    const refs = sqlite.prepare(`DELETE FROM code_refs WHERE from_file = ? AND project_id IS ?`).run(filePath, projectId ?? null);
     return { content: [{ type: 'text' as const, text: JSON.stringify({ deleted: { symbols: syms.changes, refs: refs.changes } }) }] };
   });
 }
