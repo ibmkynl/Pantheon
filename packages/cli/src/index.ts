@@ -11,7 +11,7 @@ import { cmdValidate } from './commands/validate.js';
 import { cmdForge } from './commands/forge.js';
 import { Shell } from './ui/Shell.js';
 import { ensureServers } from './lib/bootstrap.js';
-import { ensureSetup } from './lib/setup.js';
+import { ensureSetup, runSetup } from './lib/setup.js';
 
 // ── Interactive shell (no subcommand given) ────────────────────────────────
 if (process.argv.length <= 2) {
@@ -104,6 +104,15 @@ program
   .command('validate')
   .description('Check that MCP server and orchestrator are healthy')
   .action(() => { void cmdValidate(); });
+
+// pantheon setup
+program
+  .command('setup')
+  .description('Configure or change your AI provider and API key')
+  .action(async () => {
+    const ok = await runSetup();
+    process.exit(ok ? 0 : 1);
+  });
 
 // pantheon forge [--name] [--tier] [--description]
 program

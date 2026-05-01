@@ -63,7 +63,8 @@ Available slash commands:
   /budget          Show token budget
   /project         Show current project ID
   /forge <name> <desc>  Create a new agent via Prometheus
-  /exit  or  Ctrl+C     Quit
+  /setup               Change your AI provider / API key
+  /exit  or  Ctrl+C    Quit
 `.trim();
 
 // ─── Text input ───────────────────────────────────────────────────────────────
@@ -305,6 +306,10 @@ export function Shell() {
         break;
       }
 
+      case 'setup':
+        addMsg('system', 'To reconfigure your AI provider, exit Pantheon and run:\n  pantheon setup');
+        break;
+
       case 'forge': {
         const [agentName, ...descWords] = args;
         if (!agentName || descWords.length === 0) {
@@ -376,6 +381,10 @@ export function Shell() {
           body:    JSON.stringify({ prompt: text, projectId: route.projectId }),
         });
 
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Stream error ${res.status}: ${errText}`);
+        }
         if (!res.body) throw new Error('No stream body');
         const reader  = res.body.getReader();
         const decoder = new TextDecoder();
