@@ -54,6 +54,8 @@ export async function* streamAgent(
       if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
         yield { type: 'token', text: event.delta.text };
       }
+      // tool_use events are intentionally not handled here — btw-agent is
+      // designed to answer simple questions directly without MCP tool calls.
     }
 
     yield { type: 'done' };

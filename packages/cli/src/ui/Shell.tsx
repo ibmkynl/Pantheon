@@ -243,13 +243,9 @@ export function Shell() {
         break;
       }
 
-      case 'agents': {
-        // Use the same listAgents logic
-        try {
-          addMsg('system', 'Agent tiers: router-tier · core-tier · specialist-tier\nRun `pantheon agents list` for full list.');
-        } catch { /* */ }
+      case 'agents':
+        addMsg('system', 'Agent tiers: router-tier · core-tier · specialist-tier\nRun `pantheon agents list` for the full list.');
         break;
-      }
 
       case 'queue': {
         if (!projectId) { addMsg('system', 'No active project. Run a task first.'); break; }
