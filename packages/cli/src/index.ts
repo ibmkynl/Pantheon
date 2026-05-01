@@ -1,3 +1,5 @@
+import React from 'react';
+import { render } from 'ink';
 import { Command } from 'commander';
 import { cmdRun } from './commands/run.js';
 import { cmdQueue, cmdWorkerStart, cmdWorkerStop } from './commands/queue.js';
@@ -7,7 +9,16 @@ import { cmdBudgetSet, cmdBudgetStatus } from './commands/budget.js';
 import { cmdAgentsList } from './commands/agents.js';
 import { cmdValidate } from './commands/validate.js';
 import { cmdForge } from './commands/forge.js';
+import { Shell } from './ui/Shell.js';
 
+// ── Interactive shell (no subcommand given) ────────────────────────────────
+if (process.argv.length <= 2) {
+  const { waitUntilExit } = render(React.createElement(Shell));
+  await waitUntilExit();
+  process.exit(0);
+}
+
+// ── Commander subcommands ──────────────────────────────────────────────────
 const program = new Command();
 
 program

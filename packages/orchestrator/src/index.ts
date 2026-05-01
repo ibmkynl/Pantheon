@@ -6,6 +6,7 @@ import { runRouter } from './router/index.js';
 import { runPipeline } from './pipeline/index.js';
 import { startWorker, stopWorker, isWorkerRunning } from './runner/worker.js';
 import { getMcpClient, closeMcpClient } from './mcp/client.js';
+import { streamAgent } from './runner/streaming-runner.js';
 
 const config = getConfig();
 const PORT   = Number(process.env['ORCHESTRATOR_PORT'] ?? config.orchestrator.port);
@@ -128,6 +129,35 @@ app.post('/budget/set', async (request, reply) => {
   const mcp  = await getMcpClient();
   await mcp.callTool({ name: 'token.set_limit', arguments: { limitTokens: body.limitTokens, projectId: body.projectId } });
   reply.send({ ok: true });
+});
+
+// POST /stream — stream a btw-agent response token by token via SSE
+app.post('/stream', async (request, reply) => {
+  const body = z.object({
+    prompt:    z.string().min(1),
+    projectId: z.string().optional(),
+  }).parse(request.body);
+
+  reply.raw.setHeader('Content-Type', 'text/event-stream');
+  reply.raw.setHeader('Cache-Control', 'no-cache');
+  reply.raw.setHeader('Connection', 'keep-alive');
+  reply.raw.setHeader('Access-Control-Allow-Origin', '*');
+  reply.raw.flushHeaders();
+
+  const send = (data: object) => {
+    reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    for await (const chunk of streamAgent('btw-agent', body.prompt, body.projectId)) {
+      send(chunk);
+      if (chunk.type === 'done' || chunk.type === 'error') break;
+    }
+  } catch (err) {
+    send({ type: 'error', error: String(err) });
+  } finally {
+    reply.raw.end();
+  }
 });
 
 // POST /forge — run Prometheus to create a new agent
