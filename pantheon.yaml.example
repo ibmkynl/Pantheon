@@ -1,0 +1,73 @@
+# Pantheon configuration
+# Copy this file to pantheon.yaml and fill in your API keys.
+
+# ── Providers ───────────────────────────────────────────────────
+# Configure one or more AI providers. At least one is required.
+# The default_provider is used when no per-agent override is specified.
+
+ai:
+  default_provider: "anthropic"   # anthropic | openai | google | litellm
+
+  providers:
+    anthropic:
+      api_key: "sk-ant-..."
+
+    # Uncomment to add OpenAI
+    # openai:
+    #   api_key: "sk-openai-..."
+
+    # Uncomment to add Google Gemini
+    # google:
+    #   api_key: "AIza..."
+
+    # Uncomment to add LiteLLM proxy (OpenAI-compatible — supports 100+ models)
+    # litellm:
+    #   api_key: "..."           # optional, depends on your proxy config
+    #   base_url: "http://localhost:4000"
+
+  # ── Model assignments per tier ───────────────────────────────────────
+  # These are the defaults. Override per-agent below.
+  models:
+    router:     "claude-haiku-4-5-20251001"   # cheap — router tier
+    core:       "claude-sonnet-4-6"           # smart — orchestrator/planner/reviewer
+    specialist: "claude-opus-4-7"             # most capable — go-dev, sql-dev, etc.
+    btw:        "claude-haiku-4-5-20251001"   # cheap — simple Q&A
+
+  # ── Per-agent model overrides (optional) ──────────────────────────────────
+  # Format: "model"              → use default provider with this model
+  #         "provider:model"     → use specific provider
+  #         "cross-check:p1:m1,p2:m2"  → run on both, synthesize best answer
+  #
+  # agent_models:
+  #   go-dev:       "anthropic:claude-opus-4-7"
+  #   python-dev:   "openai:gpt-4o"
+  #   researcher:   "google:gemini-2.5-pro"
+  #
+  #   # Cross-check: code reviews run on two providers, synthesizer picks best
+  #   go-reviewer:  "cross-check:anthropic:claude-sonnet-4-6,openai:gpt-4o"
+  #   sql-reviewer: "cross-check:anthropic:claude-sonnet-4-6,google:gemini-2.5-pro"
+
+# ── MCP server ──────────────────────────────────────────────────────
+mcp:
+  port: 3100
+  host: "localhost"
+
+# ── Orchestrator ──────────────────────────────────────────────────
+orchestrator:
+  port: 3101
+  host: "localhost"
+
+# ── Limits ───────────────────────────────────────────────────────────
+limits:
+  max_tokens_per_session:   500000
+  max_revision_loops:       2
+  max_parallel_specialists: 3
+
+# ── External MCP plugins (optional) ───────────────────────────────────────
+# plugins:
+#   - name: "browser"
+#     transport: "stdio"
+#     command: "npx @playwright/mcp"
+#   - name: "github"
+#     transport: "http"
+#     url: "http://localhost:3200/mcp"
