@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.4",
-    "better-sqlite3": "^11.9.1",
+    "better-sqlite3": "^12.9.0",
     "drizzle-orm": "^0.42.0",
     "fastify": "^5.3.3",
     "uuid": "^11.1.0",
