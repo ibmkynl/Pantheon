@@ -229,4 +229,10 @@ export function initSchema(): void {
     CREATE INDEX IF NOT EXISTS agent_inbox_target_idx
     ON agent_inbox(queue_id, agent_name, project_id, read);
   `);
+
+  // Additive column migrations — safe to run every startup
+  const cols = sqlite.prepare('PRAGMA table_info(agent_queue)').all() as Array<{ name: string }>;
+  if (!cols.some(c => c.name === 'status_message')) {
+    sqlite.exec('ALTER TABLE agent_queue ADD COLUMN status_message TEXT');
+  }
 }

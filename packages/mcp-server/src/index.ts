@@ -15,7 +15,7 @@ import { SseEmitter } from './sse.js';
 
 const PORT = Number(process.env['MCP_PORT'] ?? 3100);
 const HOST = process.env['MCP_HOST'] ?? 'localhost';
-const TOOL_COUNT = 56; // bump when tools are added or removed
+const TOOL_COUNT = 57; // bump when tools are added or removed
 
 initSchema();
 

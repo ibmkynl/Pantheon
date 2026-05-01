@@ -137,6 +137,33 @@ export function registerAgentTools(server: McpServer, sseEmitter: SseEmitter): v
     return { content: [{ type: 'text' as const, text: JSON.stringify({ created: `${tier}/${name}.md`, path: file }) }] };
   });
 
+  // ---- agent.report_status -------------------------------------------------
+  server.registerTool('agent.report_status', {
+    description: 'Report progress from a running agent. Persists a status message on the queue entry and emits it over SSE so the CLI shows it live.',
+    inputSchema: {
+      queueId: z.string().uuid().describe('The agent_queue id of this running agent'),
+      message: z.string().min(1).describe('Human-readable progress message, e.g. "Analysing file 3/10"'),
+      data:    z.record(z.unknown()).optional().describe('Optional structured payload attached to the SSE event'),
+    },
+  }, async ({ queueId, message, data }) => {
+    const sqlite = getSqlite();
+    sqlite.prepare(`UPDATE agent_queue SET status_message = ? WHERE id = ?`).run(message, queueId);
+
+    // Also get agent name so the SSE event is attributed correctly
+    const row = sqlite.prepare(`SELECT agent_name, project_id FROM agent_queue WHERE id = ?`).get(queueId) as { agent_name: string; project_id: string | null } | undefined;
+    if (row) {
+      sseEmitter.emit({
+        agentName: row.agent_name,
+        type: 'agent.status',
+        message,
+        data: { queueId, projectId: row.project_id, ...(data ?? {}) },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ updated: true, queueId, message }) }] };
+  });
+
   // ---- agent.send_message --------------------------------------------------
   server.registerTool('agent.send_message', {
     description: 'Send a control message from the orchestrator to a running agent. The agent polls with agent.get_messages. type: "message" | "cancel" | "update_task".',

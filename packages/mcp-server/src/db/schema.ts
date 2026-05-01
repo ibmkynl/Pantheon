@@ -58,10 +58,11 @@ export const agentQueue = sqliteTable('agent_queue', {
   projectId:    text('project_id'),
   result:       text('result'),
   errorMessage: text('error_message'),
-  position:     integer('position'),
-  createdAt:    text('created_at').notNull().default(sql`(datetime('now'))`),
-  startedAt:    text('started_at'),
-  completedAt:  text('completed_at'),
+  position:      integer('position'),
+  statusMessage: text('status_message'),
+  createdAt:     text('created_at').notNull().default(sql`(datetime('now'))`),
+  startedAt:     text('started_at'),
+  completedAt:   text('completed_at'),
 });
 
 export const tokenUsage = sqliteTable('token_usage', {
