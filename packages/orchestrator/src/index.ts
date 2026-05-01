@@ -185,6 +185,18 @@ app.post('/forge', async (request, reply) => {
   }
 });
 
+// GET /providers — return configured providers and active model assignments
+app.get('/providers', async (_request, reply) => {
+  const c = getConfig();
+  const providers = Object.keys(c.ai.providers ?? {});
+  reply.send({
+    defaultProvider: c.ai.default_provider,
+    providers,
+    models:          c.ai.models,
+    agentModels:     c.ai.agent_models ?? {},
+  });
+});
+
 // GET /health
 app.get('/health', async (_request, reply) => {
   reply.send({ status: 'ok', service: 'pantheon-orchestrator', workerRunning: isWorkerRunning() });

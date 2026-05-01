@@ -1,11 +1,31 @@
 ai:
-  provider: "anthropic"
-  api_key: "YOUR_API_KEY_HERE"
+  default_provider: "anthropic"
+
+  providers:
+    anthropic:
+      api_key: "YOUR_API_KEY_HERE"
+
+  # Uncomment to add more providers:
+  # openai:
+  #   api_key: "sk-openai-..."
+  # google:
+  #   api_key: "AIza..."
+  # litellm:
+  #   api_key: "..."
+  #   base_url: "http://localhost:4000"
+
   models:
-    router: "claude-haiku-4-5-20251001"
-    core: "claude-sonnet-4-6"
-    specialist: "claude-sonnet-4-6"
-    btw: "claude-haiku-4-5-20251001"
+    router:     "claude-haiku-4-5-20251001"
+    core:       "claude-sonnet-4-6"
+    specialist: "claude-opus-4-7"
+    btw:        "claude-haiku-4-5-20251001"
+
+  # Per-agent overrides (optional):
+  # agent_models:
+  #   go-dev:      "anthropic:claude-opus-4-7"
+  #   python-dev:  "openai:gpt-4o"
+  #   researcher:  "google:gemini-2.5-pro"
+  #   go-reviewer: "cross-check:anthropic:claude-sonnet-4-6,openai:gpt-4o"
 
 mcp:
   port: 3100

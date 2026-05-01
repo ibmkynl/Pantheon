@@ -1,25 +1,17 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { MessageParam, Tool, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages.js';
-import { getAnthropicClient } from '../llm/client.js';
 import { getMcpClient } from '../mcp/client.js';
 import { getConfig } from '../config.js';
+import { getProvider, resolveAgentModel } from '../llm/provider.js';
+import { runCrossCheck } from './cross-check-runner.js';
+import type { UnifiedTool } from '../llm/types.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // packages/orchestrator/dist/index.js → 3 levels up = repo root
-const AGENTS_DIR = path.resolve(__dirname, '../../../agents');
+const AGENTS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../agents');
 const TIERS = ['router-tier', 'core-tier', 'specialist-tier'];
 
-function extractText(blocks: unknown[]): string {
-  return blocks
-    .filter((b): b is { type: string; text: string } => typeof b === 'object' && b !== null && (b as Record<string, unknown>)['type'] === 'text')
-    .map(b => b.text)
-    .join('\n')
-    .trim();
-}
-
-async function findAgent(agentName: string): Promise<{ prompt: string; tier: string }> {
+export async function findAgent(agentName: string): Promise<{ prompt: string; tier: string }> {
   for (const tier of TIERS) {
     const fp = path.join(AGENTS_DIR, tier, `${agentName}.md`);
     try {
@@ -30,18 +22,10 @@ async function findAgent(agentName: string): Promise<{ prompt: string; tier: str
   throw new Error(`Agent "${agentName}" not found in any tier under ${AGENTS_DIR}`);
 }
 
-function modelForTier(agentName: string, tier: string): string {
-  const { models } = getConfig().ai;
-  if (tier === 'router-tier')  return models.router;
-  if (agentName === 'btw-agent') return models.btw;
-  if (tier === 'core-tier')    return models.core;
-  return models.specialist;
-}
-
 export interface RunAgentOpts {
-  agentName:     string;
-  task:          string;
-  projectId?:    string;
+  agentName:      string;
+  task:           string;
+  projectId?:     string;
   maxIterations?: number;
 }
 
@@ -58,80 +42,50 @@ export async function runAgent({
   maxIterations = 50,
 }: RunAgentOpts): Promise<RunAgentResult> {
   const { prompt: systemPrompt, tier } = await findAgent(agentName);
-  const model     = modelForTier(agentName, tier);
-  const anthropic = getAnthropicClient();
-  const mcp       = await getMcpClient();
+  const config  = getConfig();
+  const mcp     = await getMcpClient();
 
   const { tools: mcpTools } = await mcp.listTools();
-  const tools: Tool[] = mcpTools.map(t => ({
-    name:         t.name,
-    description:  t.description ?? '',
-    input_schema: (t.inputSchema ?? { type: 'object', properties: {} }) as Tool['input_schema'],
+  const tools: UnifiedTool[] = mcpTools.map(t => ({
+    name:        t.name,
+    description: t.description ?? '',
+    inputSchema: (t.inputSchema ?? { type: 'object', properties: {} }) as Record<string, unknown>,
   }));
 
-  // Inject projectId into task context so agents always know their project scope
-  const taskWithCtx = projectId
-    ? `[projectId: ${projectId}]\n\n${task}`
-    : task;
+  const taskWithCtx = projectId ? `[projectId: ${projectId}]\n\n${task}` : task;
 
-  const messages: MessageParam[] = [{ role: 'user', content: taskWithCtx }];
-  let iterations    = 0;
-  let toolCallCount = 0;
+  const callTool = async (name: string, input: Record<string, unknown>): Promise<string> => {
+    try {
+      const result = await mcp.callTool({ name, arguments: input });
+      const block  = (result.content as Array<{ type: string; text?: string }>).find(b => b.type === 'text');
+      return block?.text ?? '';
+    } catch (err) {
+      throw new Error(`Tool error (${name}): ${String(err)}`);
+    }
+  };
 
-  while (iterations < maxIterations) {
-    iterations++;
+  // Resolve which provider+model to use (supports cross-check)
+  const agentSpec = resolveAgentModel(agentName, tier, config);
 
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens: 8192,
-      system:     systemPrompt,
-      messages,
-      tools,
+  if (agentSpec.kind === 'cross-check') {
+    return runCrossCheck({
+      systemPrompt,
+      task:      taskWithCtx,
+      specs:     agentSpec.specs,
+      config,
+      projectId,
     });
-
-    messages.push({ role: 'assistant', content: response.content });
-
-    if (response.stop_reason === 'end_turn') {
-      const output = extractText(response.content);
-      return { output, iterations, toolCallCount };
-    }
-
-    if (response.stop_reason === 'tool_use') {
-      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use') as Array<
-        { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-      >;
-
-      const toolResults: ToolResultBlockParam[] = await Promise.all(
-        toolUseBlocks.map(async block => {
-          toolCallCount++;
-          try {
-            const result = await mcp.callTool({ name: block.name, arguments: block.input });
-            return {
-              type:        'tool_result' as const,
-              tool_use_id: block.id,
-              content:     result.content as Array<{ type: 'text'; text: string }>,
-            };
-          } catch (err) {
-            return {
-              type:        'tool_result' as const,
-              tool_use_id: block.id,
-              content:     [{ type: 'text' as const, text: `Tool error: ${String(err)}` }],
-              is_error:    true,
-            };
-          }
-        })
-      );
-
-      messages.push({ role: 'user', content: toolResults });
-      continue;
-    }
-
-    // max_tokens or other stop — collect whatever text we have and break
-    break;
   }
 
-  const lastMsg = messages.findLast((m: { role: string }) => m.role === 'assistant') as
-    { role: string; content: unknown } | undefined;
-  const output  = Array.isArray(lastMsg?.content) ? extractText(lastMsg.content as unknown[]) : '';
-  return { output, iterations, toolCallCount };
+  const { provider: providerName, model } = agentSpec.spec;
+  const provider = getProvider(providerName, config);
+
+  return provider.runAgent({
+    model,
+    systemPrompt,
+    task: taskWithCtx,
+    tools,
+    callTool,
+    maxIterations,
+  });
 }
