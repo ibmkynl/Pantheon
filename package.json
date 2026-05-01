@@ -21,7 +21,8 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
   },
   "scripts": {
     "build": "pnpm -r build",
@@ -37,7 +38,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",
     "@modelcontextprotocol/sdk": "^1.11.4",
-    "better-sqlite3": "^11.9.1",
+    "better-sqlite3": "^12.9.0",
     "commander": "^12.1.0",
     "drizzle-orm": "^0.42.0",
     "fastify": "^5.3.3",
