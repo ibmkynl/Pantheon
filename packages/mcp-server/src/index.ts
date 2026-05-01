@@ -9,23 +9,25 @@ import { registerFileTools } from './tools/file.js';
 import { registerTodoTools } from './tools/todo.js';
 import { registerAgentTools } from './tools/agent.js';
 import { registerProjectTools } from './tools/project.js';
+import { registerGitTools } from './tools/git.js';
 import { SseEmitter } from './sse.js';
 
 const PORT = Number(process.env['MCP_PORT'] ?? 3100);
 const HOST = process.env['MCP_HOST'] ?? 'localhost';
-const TOOL_COUNT = 32; // bump when tools are added or removed
+const TOOL_COUNT = 42; // bump when tools are added or removed
 
 initSchema();
 
 const sseEmitter = new SseEmitter();
 
 function createMcpServer(): McpServer {
-  const server = new McpServer({ name: 'pantheon-mcp-server', version: '0.1.0' });
+  const server = new McpServer({ name: 'pantheon-mcp-server', version: '0.2.0' });
   registerMemoryTools(server);
   registerFileTools(server);
   registerTodoTools(server);
   registerAgentTools(server, sseEmitter);
   registerProjectTools(server);
+  registerGitTools(server);
   return server;
 }
 
@@ -72,7 +74,6 @@ app.post('/mcp', async (request, reply) => {
       return;
     }
 
-    // Pass raw Node.js req/res — transport owns the response from here
     await transport.handleRequest(request.raw, reply.raw, request.body);
   } catch (err) {
     app.log.error(err);
@@ -86,7 +87,6 @@ app.post('/mcp', async (request, reply) => {
   }
 });
 
-// GET /mcp — MCP protocol SSE stream (resumability)
 app.get('/mcp', async (request, reply) => {
   const sessionId = request.headers['mcp-session-id'] as string | undefined;
   if (!sessionId || !transports.has(sessionId)) {
@@ -97,7 +97,6 @@ app.get('/mcp', async (request, reply) => {
   await transport.handleRequest(request.raw, reply.raw);
 });
 
-// DELETE /mcp — session termination
 app.delete('/mcp', async (request, reply) => {
   const sessionId = request.headers['mcp-session-id'] as string | undefined;
   if (!sessionId || !transports.has(sessionId)) {
@@ -108,7 +107,6 @@ app.delete('/mcp', async (request, reply) => {
   await transport.handleRequest(request.raw, reply.raw);
 });
 
-// GET /events — custom SSE for live CLI/UI updates
 app.get('/events', async (request, reply) => {
   reply.raw.setHeader('Content-Type', 'text/event-stream');
   reply.raw.setHeader('Cache-Control', 'no-cache');
@@ -120,11 +118,7 @@ app.get('/events', async (request, reply) => {
   sseEmitter.addClient(reply);
 
   const heartbeat = setInterval(() => {
-    try {
-      reply.raw.write(': heartbeat\n\n');
-    } catch {
-      clearInterval(heartbeat);
-    }
+    try { reply.raw.write(': heartbeat\n\n'); } catch { clearInterval(heartbeat); }
   }, 30_000);
 
   request.raw.on('close', () => {
@@ -132,13 +126,9 @@ app.get('/events', async (request, reply) => {
     sseEmitter.removeClient(reply);
   });
 
-  // Suspend until client disconnects
-  await new Promise<void>((resolve) => {
-    request.raw.on('close', resolve);
-  });
+  await new Promise<void>((resolve) => { request.raw.on('close', resolve); });
 });
 
-// GET /health
 app.get('/health', async (_request, reply) => {
   reply.send({ status: 'ok', tools: TOOL_COUNT });
 });
