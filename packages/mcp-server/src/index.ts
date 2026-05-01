@@ -10,11 +10,12 @@ import { registerTodoTools } from './tools/todo.js';
 import { registerAgentTools } from './tools/agent.js';
 import { registerProjectTools } from './tools/project.js';
 import { registerGitTools } from './tools/git.js';
+import { registerCodeTools } from './tools/code.js';
 import { SseEmitter } from './sse.js';
 
 const PORT = Number(process.env['MCP_PORT'] ?? 3100);
 const HOST = process.env['MCP_HOST'] ?? 'localhost';
-const TOOL_COUNT = 42; // bump when tools are added or removed
+const TOOL_COUNT = 56; // bump when tools are added or removed
 
 initSchema();
 
@@ -28,6 +29,7 @@ function createMcpServer(): McpServer {
   registerAgentTools(server, sseEmitter);
   registerProjectTools(server);
   registerGitTools(server);
+  registerCodeTools(server);
   return server;
 }
 

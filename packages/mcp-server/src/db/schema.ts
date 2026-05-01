@@ -83,3 +83,39 @@ export const tokenBudget = sqliteTable('token_budget', {
   usedTokens:  integer('used_tokens').notNull().default(0),
   updatedAt:   text('updated_at').notNull().default(sql`(datetime('now'))`),
 });
+
+export const codeSymbols = sqliteTable('code_symbols', {
+  id:        integer('id').primaryKey({ autoIncrement: true }),
+  projectId: text('project_id'),
+  filePath:  text('file_path').notNull(),
+  name:      text('name').notNull(),
+  kind:      text('kind').notNull(),
+  language:  text('language'),
+  lineStart: integer('line_start').notNull(),
+  lineEnd:   integer('line_end'),
+  signature: text('signature'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
+});
+
+export const codeRefs = sqliteTable('code_refs', {
+  id:        integer('id').primaryKey({ autoIncrement: true }),
+  projectId: text('project_id'),
+  fromFile:  text('from_file').notNull(),
+  toSymbol:  text('to_symbol').notNull(),
+  toFile:    text('to_file'),
+  kind:      text('kind').notNull(),
+  line:      integer('line'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+});
+
+export const agentInbox = sqliteTable('agent_inbox', {
+  id:        integer('id').primaryKey({ autoIncrement: true }),
+  queueId:   text('queue_id'),
+  agentName: text('agent_name').notNull(),
+  projectId: text('project_id'),
+  type:      text('type').notNull().default('message'),
+  payload:   text('payload'),
+  read:      integer('read').notNull().default(0),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+});

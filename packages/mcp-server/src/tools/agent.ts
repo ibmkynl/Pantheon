@@ -137,6 +137,101 @@ export function registerAgentTools(server: McpServer, sseEmitter: SseEmitter): v
     return { content: [{ type: 'text' as const, text: JSON.stringify({ created: `${tier}/${name}.md`, path: file }) }] };
   });
 
+  // ---- agent.send_message --------------------------------------------------
+  server.registerTool('agent.send_message', {
+    description: 'Send a control message from the orchestrator to a running agent. The agent polls with agent.get_messages. type: "message" | "cancel" | "update_task".',
+    inputSchema: {
+      agentName: z.string().min(1),
+      type:      z.enum(['message', 'cancel', 'update_task']).default('message'),
+      payload:   z.string().optional().describe('JSON-serialisable string payload'),
+      queueId:   z.string().uuid().optional().describe('Target specific queue entry; omit to message all agents with this name'),
+      projectId: z.string().optional(),
+    },
+  }, async ({ agentName, type, payload, queueId, projectId }) => {
+    const sqlite = getSqlite();
+    const now = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO agent_inbox (queue_id, agent_name, project_id, type, payload, read, created_at)
+      VALUES (?, ?, ?, ?, ?, 0, ?)
+    `).run(queueId ?? null, agentName, projectId ?? null, type, payload ?? null, now);
+
+    // If it's a cancel, also update the queue entry status directly
+    if (type === 'cancel') {
+      if (queueId) {
+        sqlite.prepare(`UPDATE agent_queue SET status = 'cancelled', completed_at = ? WHERE id = ? AND status IN ('queued','running')`).run(now, queueId);
+      } else {
+        sqlite.prepare(`UPDATE agent_queue SET status = 'cancelled', completed_at = ? WHERE agent_name = ? AND (? IS NULL OR project_id = ?) AND status IN ('queued','running')`).run(now, agentName, projectId ?? null, projectId ?? null);
+      }
+    }
+
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ sent: true, type, agentName, queueId: queueId ?? null }) }] };
+  });
+
+  // ---- agent.get_messages --------------------------------------------------
+  server.registerTool('agent.get_messages', {
+    description: 'Poll the inbox for messages addressed to this agent. Marks messages as read. Call at the start of each tool loop iteration.',
+    inputSchema: {
+      agentName: z.string().min(1),
+      queueId:   z.string().uuid().optional(),
+      projectId: z.string().optional(),
+      markRead:  z.boolean().optional().default(true),
+    },
+  }, async ({ agentName, queueId, projectId, markRead = true }) => {
+    const sqlite = getSqlite();
+
+    const rows = sqlite.prepare(`
+      SELECT id, type, payload, created_at FROM agent_inbox
+      WHERE agent_name = ?
+        AND read = 0
+        AND (? IS NULL OR queue_id = ?)
+        AND (? IS NULL OR project_id = ?)
+      ORDER BY created_at ASC
+    `).all(agentName, queueId ?? null, queueId ?? null, projectId ?? null, projectId ?? null) as Array<{ id: number; type: string; payload: string | null; created_at: string }>;
+
+    if (markRead && rows.length > 0) {
+      const ids = rows.map(r => r.id);
+      sqlite.prepare(`UPDATE agent_inbox SET read = 1 WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
+    }
+
+    return { content: [{ type: 'text' as const, text: JSON.stringify(rows.map(r => ({ type: r.type, payload: r.payload, at: r.created_at }))) }] };
+  });
+
+  // ---- agent.cancel --------------------------------------------------------
+  server.registerTool('agent.cancel', {
+    description: 'Cancel one or all queued/running agents for a project. Sends a cancel inbox message and marks queue entries as cancelled.',
+    inputSchema: {
+      projectId: z.string().optional(),
+      queueId:   z.string().uuid().optional().describe('Cancel a specific queue entry. If omitted, cancels all non-terminal entries for the project.'),
+    },
+  }, async ({ projectId, queueId }) => {
+    const sqlite = getSqlite();
+    const now = new Date().toISOString();
+    let changes = 0;
+
+    if (queueId) {
+      const r = sqlite.prepare(`UPDATE agent_queue SET status = 'cancelled', completed_at = ? WHERE id = ? AND status IN ('queued','running')`).run(now, queueId);
+      changes = r.changes;
+      const row = sqlite.prepare(`SELECT agent_name FROM agent_queue WHERE id = ?`).get(queueId) as { agent_name: string } | undefined;
+      if (row) {
+        sqlite.prepare(`INSERT INTO agent_inbox (queue_id, agent_name, project_id, type, read, created_at) VALUES (?, ?, ?, 'cancel', 0, ?)`).run(queueId, row.agent_name, projectId ?? null, now);
+      }
+    } else {
+      const rows = sqlite.prepare(`SELECT id, agent_name FROM agent_queue WHERE (? IS NULL OR project_id = ?) AND status IN ('queued','running')`).all(projectId ?? null, projectId ?? null) as Array<{ id: string; agent_name: string }>;
+      const update = sqlite.prepare(`UPDATE agent_queue SET status = 'cancelled', completed_at = ? WHERE id = ?`);
+      const inbox  = sqlite.prepare(`INSERT INTO agent_inbox (queue_id, agent_name, project_id, type, read, created_at) VALUES (?, ?, ?, 'cancel', 0, ?)`);
+      const tx = sqlite.transaction(() => {
+        for (const row of rows) {
+          update.run(now, row.id);
+          inbox.run(row.id, row.agent_name, projectId ?? null, now);
+        }
+      });
+      tx();
+      changes = rows.length;
+    }
+
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ cancelled: changes }) }] };
+  });
+
   server.registerTool('agent.emit_event', {
     description: 'Push a live event to all SSE subscribers on GET /events.',
     inputSchema: {
