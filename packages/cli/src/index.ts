@@ -6,6 +6,7 @@ import { cmdLogs } from './commands/logs.js';
 import { cmdBudgetSet, cmdBudgetStatus } from './commands/budget.js';
 import { cmdAgentsList } from './commands/agents.js';
 import { cmdValidate } from './commands/validate.js';
+import { cmdForge } from './commands/forge.js';
 
 const program = new Command();
 
@@ -83,5 +84,14 @@ program
   .command('validate')
   .description('Check that MCP server and orchestrator are healthy')
   .action(() => { void cmdValidate(); });
+
+// pantheon forge [--name] [--tier] [--description]
+program
+  .command('forge')
+  .description('Interactively create a new agent via Prometheus')
+  .option('-n, --name <name>', 'agent name (snake-case)')
+  .option('-t, --tier <tier>', 'tier: specialist-tier | core-tier | router-tier')
+  .option('-d, --description <desc>', 'what the agent should do')
+  .action(opts => { void cmdForge(opts); });
 
 program.parse();

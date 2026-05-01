@@ -231,8 +231,8 @@ plugins:
 | 3 | `phase/3-router` | ✅ Merged | Router tier: understander → classifier → token-estimator |
 | 4 | `phase/4-pipeline` | ✅ Merged | Full pipeline: route → orchestrate → queue → run |
 | 5 | `phase/5-ink-cli` | ✅ Merged | Ink/React CLI — live QueueView, LogsView, RunView |
-| 6 | `phase/6-specialists-parallel` | 🔜 Next | Queue-manager agent, python/rust specialists, CI workflow |
-| 7 | — | — | Prometheus agent creator (`pantheon forge`) |
+| 6 | `phase/6-specialists-parallel` | ✅ Merged | Queue-manager agent, python/rust specialists, CI workflow |
+| 7 | `phase/7-forge` | 🔜 Next | Prometheus agent creator (`pantheon forge`) |
 | 8 | — | — | Web dashboard (Next.js + shadcn/ui) |
 
 ## Contribution & merge rules

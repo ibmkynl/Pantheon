@@ -130,6 +130,31 @@ app.post('/budget/set', async (request, reply) => {
   reply.send({ ok: true });
 });
 
+// POST /forge — run Prometheus to create a new agent
+app.post('/forge', async (request, reply) => {
+  const body = z.object({
+    name:        z.string().min(1).regex(/^[a-z0-9-]+$/),
+    tier:        z.enum(['router-tier', 'core-tier', 'specialist-tier']).optional(),
+    description: z.string().min(10),
+  }).parse(request.body);
+
+  const tier = body.tier ?? 'specialist-tier';
+  const task = [
+    `Create a new agent with the following specification:`,
+    ``,
+    `name: ${body.name}`,
+    `tier: ${tier}`,
+    `description: ${body.description}`,
+  ].join('\n');
+
+  try {
+    const result = await runAgent({ agentName: 'prometheus', task });
+    reply.send({ name: body.name, tier, output: result.output });
+  } catch (err) {
+    reply.status(500).send({ error: String(err) });
+  }
+});
+
 // GET /health
 app.get('/health', async (_request, reply) => {
   reply.send({ status: 'ok', service: 'pantheon-orchestrator', workerRunning: isWorkerRunning() });

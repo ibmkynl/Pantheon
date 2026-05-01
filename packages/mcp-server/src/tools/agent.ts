@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { eq, isNull } from 'drizzle-orm';
@@ -5,6 +8,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getDb, getSqlite } from '../db/index.js';
 import { agentQueue } from '../db/schema.js';
 import type { SseEmitter } from '../sse.js';
+
+// packages/mcp-server/dist/index.js → 3 levels up = repo root
+const AGENTS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../agents');
 
 export function registerAgentTools(server: McpServer, sseEmitter: SseEmitter): void {
   server.registerTool(
@@ -190,6 +196,32 @@ export function registerAgentTools(server: McpServer, sseEmitter: SseEmitter): v
         }
       })();
       return { content: [{ type: 'text' as const, text: JSON.stringify({ reordered: order.length }) }] };
+    }
+  );
+
+  server.registerTool(
+    'agent.create_agent',
+    {
+      description: 'Create a new agent by writing its system prompt .md file to the agents/ directory. Used by Prometheus.',
+      inputSchema: {
+        name:    z.string().min(1).regex(/^[a-z0-9-]+$/, 'Must be lowercase alphanumeric + hyphens'),
+        tier:    z.enum(['router-tier', 'core-tier', 'specialist-tier']),
+        content: z.string().min(10),
+      },
+    },
+    async ({ name, tier, content }) => {
+      const dir  = path.join(AGENTS_DIR, tier);
+      const file = path.join(dir, `${name}.md`);
+
+      // Prevent path traversal
+      if (!file.startsWith(AGENTS_DIR)) {
+        throw new Error('Invalid agent name — path traversal detected');
+      }
+
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(file, content, 'utf-8');
+
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ created: `${tier}/${name}.md`, path: file }) }] };
     }
   );
 
