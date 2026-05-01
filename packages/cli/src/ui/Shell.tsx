@@ -132,7 +132,7 @@ export function Shell() {
   const contentRows      = Math.max(rows - 5, 8); // leave room for input + status bar
 
   const [messages,     setMessages]     = useState<Message[]>([
-    { id: '0', role: 'system', content: 'Pantheon ready. Type a message or /help for commands. Press Ctrl+C to quit.' },
+    { id: '0', role: 'system', content: 'Pantheon ready. Just describe what you want — planning, agent selection, and execution are automatic. (Type /help for power-user commands · Ctrl+C to quit)' },
   ]);
   const [input,        setInput]        = useState('');
   const [processing,   setProcessing]   = useState(false);
