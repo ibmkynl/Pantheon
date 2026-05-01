@@ -7,8 +7,11 @@ import { getProvider, resolveAgentModel } from '../llm/provider.js';
 import { runCrossCheck } from './cross-check-runner.js';
 import type { UnifiedTool } from '../llm/types.js';
 
-// packages/orchestrator/dist/index.js → 3 levels up = repo root
-const AGENTS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../agents');
+// Agents directory lookup:
+//   1. $PANTHEON_AGENTS_DIR (explicit override)
+//   2. <package-root>/agents (always present in installed npm package — files: ["agents/"])
+const AGENTS_DIR = process.env['PANTHEON_AGENTS_DIR']
+  ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../agents');
 const TIERS = ['router-tier', 'core-tier', 'specialist-tier'];
 
 export async function findAgent(agentName: string): Promise<{ prompt: string; tier: string }> {
@@ -64,7 +67,6 @@ export async function runAgent({
     }
   };
 
-  // Resolve which provider+model to use (supports cross-check)
   const agentSpec = resolveAgentModel(agentName, tier, config);
 
   if (agentSpec.kind === 'cross-check') {
