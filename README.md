@@ -95,6 +95,10 @@ pnpm --filter @pantheon/cli link --global
 
 # Or run directly:
 node packages/cli/dist/index.js <command>
+
+# Launch the interactive shell (no subcommand):
+pantheon
+# Drops into the full terminal UI — type messages, use /help for slash commands
 ```
 
 ### Test it
@@ -232,8 +236,8 @@ plugins:
 | 4 | `phase/4-pipeline` | ✅ Merged | Full pipeline: route → orchestrate → queue → run |
 | 5 | `phase/5-ink-cli` | ✅ Merged | Ink/React CLI — live QueueView, LogsView, RunView |
 | 6 | `phase/6-specialists-parallel` | ✅ Merged | Queue-manager agent, python/rust specialists, CI workflow |
-| 7 | `phase/7-forge` | 🔜 Next | Prometheus agent creator (`pantheon forge`) |
-| 8 | — | — | Web dashboard (Next.js + shadcn/ui) |
+| 7 | `phase/7-forge` | ✅ Merged | Prometheus agent creator (`pantheon forge`) |
+| 8 | `phase/8-terminal-ui` | 🔜 Next | Full terminal UI shell — interactive REPL, streaming, slash commands |
 
 ## Contribution & merge rules
 
