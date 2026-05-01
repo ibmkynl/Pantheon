@@ -10,9 +10,18 @@ import { cmdAgentsList } from './commands/agents.js';
 import { cmdValidate } from './commands/validate.js';
 import { cmdForge } from './commands/forge.js';
 import { Shell } from './ui/Shell.js';
+import { ensureServers } from './lib/bootstrap.js';
+import { ensureSetup } from './lib/setup.js';
 
 // ── Interactive shell (no subcommand given) ────────────────────────────────
 if (process.argv.length <= 2) {
+  // First-run setup: ensures ~/.pantheon/pantheon.yaml exists with a real API key
+  const ready = await ensureSetup();
+  if (!ready) process.exit(1);
+
+  // Auto-spawn MCP server + orchestrator if not already running
+  await ensureServers();
+
   const { waitUntilExit } = render(React.createElement(Shell));
   await waitUntilExit();
   process.exit(0);
