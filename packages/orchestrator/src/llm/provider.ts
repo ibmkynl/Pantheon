@@ -71,9 +71,15 @@ export function resolveAgentModel(
 ): AgentModelSpec {
   const defaultProvider = config.ai.default_provider ?? config.ai.provider ?? 'anthropic';
 
-  // Check per-agent override
   const agentOverride = config.ai.agent_models?.[agentName];
-  if (agentOverride) return parseAgentModelSpec(agentOverride, defaultProvider);
+  if (agentOverride) {
+    const parsed = parseAgentModelSpec(agentOverride, defaultProvider);
+    // Synthesizer can never cross-check itself — would recurse infinitely
+    if (agentName === 'synthesizer' && parsed.kind === 'cross-check') {
+      return { kind: 'single', spec: parsed.specs[0]! };
+    }
+    return parsed;
+  }
 
   // Fall back to tier defaults
   const { models } = config.ai;

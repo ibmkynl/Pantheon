@@ -11,17 +11,6 @@ import type { UnifiedTool } from '../llm/types.js';
 const AGENTS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../agents');
 const TIERS = ['router-tier', 'core-tier', 'specialist-tier'];
 
-function extractText(blocks: unknown[]): string {
-  return blocks
-    .filter((b): b is { type: string; text: string } =>
-      typeof b === 'object' && b !== null &&
-      (b as Record<string, unknown>)['type'] === 'text'
-    )
-    .map(b => b.text)
-    .join('\n')
-    .trim();
-}
-
 export async function findAgent(agentName: string): Promise<{ prompt: string; tier: string }> {
   for (const tier of TIERS) {
     const fp = path.join(AGENTS_DIR, tier, `${agentName}.md`);

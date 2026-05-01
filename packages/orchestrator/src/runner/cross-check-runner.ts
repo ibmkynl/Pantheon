@@ -5,10 +5,12 @@ import { getMcpClient } from '../mcp/client.js';
 import { runAgent } from './agent-runner.js';
 
 interface ProviderOutput {
-  provider: string;
-  model:    string;
-  output:   string;
-  error?:   string;
+  provider:      string;
+  model:         string;
+  output:        string;
+  iterations:    number;
+  toolCallCount: number;
+  error?:        string;
 }
 
 async function callMcpTool(name: string, input: Record<string, unknown>): Promise<string> {
@@ -56,18 +58,28 @@ export async function runCrossCheck({
           tools,
           callTool:     callMcpTool,
         });
-        return { provider: spec.provider, model: spec.model, output: result.output };
+        return {
+          provider:      spec.provider,
+          model:         spec.model,
+          output:        result.output,
+          iterations:    result.iterations,
+          toolCallCount: result.toolCallCount,
+        };
       } catch (err) {
-        return { provider: spec.provider, model: spec.model, output: '', error: String(err) };
+        return { provider: spec.provider, model: spec.model, output: '', iterations: 0, toolCallCount: 0, error: String(err) };
       }
     })
   );
 
   const outputs: ProviderOutput[] = results.map(r =>
-    r.status === 'fulfilled' ? r.value : { provider: 'unknown', model: 'unknown', output: '', error: String(r.reason) }
+    r.status === 'fulfilled'
+      ? r.value
+      : { provider: 'unknown', model: 'unknown', output: '', iterations: 0, toolCallCount: 0, error: String(r.reason) }
   );
 
   const successful = outputs.filter(o => !o.error && o.output);
+  const totalIterations    = outputs.reduce((sum, o) => sum + o.iterations, 0);
+  const totalToolCallCount = outputs.reduce((sum, o) => sum + o.toolCallCount, 0);
 
   if (successful.length === 0) {
     const errors = outputs.map(o => `${o.provider}:${o.model} — ${o.error}`).join('\n');
@@ -75,7 +87,8 @@ export async function runCrossCheck({
   }
 
   if (successful.length === 1) {
-    return { output: successful[0]!.output, iterations: 1, toolCallCount: 0 };
+    const only = successful[0]!;
+    return { output: only.output, iterations: totalIterations, toolCallCount: totalToolCallCount };
   }
 
   // Synthesize results across providers
@@ -99,7 +112,7 @@ export async function runCrossCheck({
 
   return {
     output:        synthResult.output,
-    iterations:    outputs.length + synthResult.iterations,
-    toolCallCount: synthResult.toolCallCount,
+    iterations:    totalIterations + synthResult.iterations,
+    toolCallCount: totalToolCallCount + synthResult.toolCallCount,
   };
 }
