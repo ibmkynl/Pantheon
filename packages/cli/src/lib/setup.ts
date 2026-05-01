@@ -97,6 +97,11 @@ export async function ensureSetup(): Promise<boolean> {
       process.stdout.write(`\n  That doesn't look like a ${hint.name} key (expected prefix "${hint.keyPrefix}"). Try again.\n\n`);
       return false;
     }
+    // OpenAI's prefix "sk-" also matches Anthropic's "sk-ant-" — reject the overlap
+    if (provider === 'openai' && key.startsWith('sk-ant-')) {
+      process.stdout.write(`\n  That looks like an Anthropic key, not OpenAI. Pick option 1 instead.\n\n`);
+      return false;
+    }
 
     const cfgDir = path.dirname(cfgPath);
     fs.mkdirSync(cfgDir, { recursive: true });

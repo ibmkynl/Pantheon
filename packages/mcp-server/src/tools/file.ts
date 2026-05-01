@@ -1,21 +1,28 @@
 import { z } from 'zod';
 import fs from 'node:fs/promises';
+import { existsSync as fileExists } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getSqlite } from '../db/index.js';
 
+const fsSync = { existsSync: fileExists };
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Resolve workspaces base. Search order:
+ *   1. $PANTHEON_WORKSPACES (explicit override)
+ *   2. <repo-root>/workspaces (only if it actually exists — dev mode)
+ *   3. $PANTHEON_HOME/workspaces (defaults to ~/.pantheon/workspaces) — production
+ */
 function resolveWorkspaceBase(): string {
   const env = process.env['PANTHEON_WORKSPACES'];
   if (env) return path.resolve(env);
-  const cwdLocal = path.resolve(process.cwd(), 'workspaces');
-  if (process.env['PANTHEON_HOME'] === undefined) {
-    return path.resolve(__dirname, '../../../workspaces');
-  }
-  void cwdLocal;
+
+  const repoLocal = path.resolve(__dirname, '../../../workspaces');
+  if (fsSync.existsSync(repoLocal)) return repoLocal;
+
   const home = process.env['PANTHEON_HOME'] || path.join(os.homedir(), '.pantheon');
   return path.join(home, 'workspaces');
 }
