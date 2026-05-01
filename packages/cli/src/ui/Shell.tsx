@@ -58,6 +58,7 @@ Available slash commands:
   /clear           Clear the conversation
   /queue           Show the agent queue for current project
   /agents          List all registered agents
+  /providers       Show configured AI providers and models
   /status          Check MCP + orchestrator health
   /budget          Show token budget
   /project         Show current project ID
@@ -246,6 +247,34 @@ export function Shell() {
       case 'agents':
         addMsg('system', 'Agent tiers: router-tier · core-tier · specialist-tier\nRun `pantheon agents list` for the full list.');
         break;
+
+      case 'providers': {
+        try {
+          const res = await get<{
+            defaultProvider: string;
+            providers: string[];
+            models: Record<string, string>;
+            agentModels: Record<string, string>;
+          }>(orchestratorUrl('/providers'));
+          const lines = [
+            `Default provider: ${res.defaultProvider}`,
+            `Configured:       ${res.providers.join(', ') || 'none'}`,
+            '',
+            'Model tiers:',
+            ...Object.entries(res.models).map(([k, v]) => `  ${k.padEnd(12)} ${v}`),
+          ];
+          if (Object.keys(res.agentModels).length > 0) {
+            lines.push('', 'Per-agent overrides:');
+            for (const [agent, spec] of Object.entries(res.agentModels)) {
+              lines.push(`  ${agent.padEnd(20)} ${spec}`);
+            }
+          }
+          addMsg('system', lines.join('\n'));
+        } catch (e) {
+          addMsg('error', String(e));
+        }
+        break;
+      }
 
       case 'queue': {
         if (!projectId) { addMsg('system', 'No active project. Run a task first.'); break; }
