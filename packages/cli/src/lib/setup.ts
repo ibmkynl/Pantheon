@@ -59,15 +59,30 @@ function hasUsableKey(p: string): boolean {
 export async function ensureSetup(): Promise<boolean> {
   const cfgPath = configPath();
   if (hasUsableKey(cfgPath)) return true;
+  return runSetupWizard(cfgPath, false);
+}
 
-  process.stdout.write('\n  Welcome to Pantheon\n');
-  process.stdout.write('  ──────────────────\n\n');
-  process.stdout.write('  No API key configured yet. Let\'s set one up.\n\n');
-  process.stdout.write('  Choose a provider:\n');
-  process.stdout.write('    1) Anthropic   (Claude)\n');
-  process.stdout.write('    2) OpenAI      (GPT)\n');
-  process.stdout.write('    3) Google      (Gemini)\n');
-  process.stdout.write('    4) Skip        (configure manually later)\n\n');
+export async function runSetup(): Promise<boolean> {
+  const cfgPath = configPath();
+  return runSetupWizard(cfgPath, true);
+}
+
+async function runSetupWizard(cfgPath: string, force: boolean): Promise<boolean> {
+  const existing = hasUsableKey(cfgPath);
+
+  process.stdout.write('\n  Pantheon — Provider Setup\n');
+  process.stdout.write('  ─────────────────────────\n\n');
+  if (existing && force) {
+    process.stdout.write(`  Current config: ${cfgPath}\n`);
+    process.stdout.write('  Choose a provider to update:\n\n');
+  } else {
+    process.stdout.write('  No API key configured yet. Let\'s set one up.\n\n');
+    process.stdout.write('  Choose a provider:\n');
+  }
+  process.stdout.write('    1) Anthropic   (Claude)  — console.anthropic.com/settings/keys\n');
+  process.stdout.write('    2) OpenAI      (GPT)     — platform.openai.com/api-keys\n');
+  process.stdout.write('    3) Google      (Gemini)  — aistudio.google.com/apikey\n');
+  process.stdout.write('    4) Skip        (edit config manually)\n\n');
 
   const rl = readline.createInterface({ input, output });
   try {
@@ -90,14 +105,12 @@ export async function ensureSetup(): Promise<boolean> {
     }
 
     const hint = PROVIDER_HINTS[provider]!;
-    process.stdout.write(`\n  Get a key at: ${hint.signupUrl}\n`);
     const key = (await rl.question(`  Paste your ${hint.name} API key: `)).trim();
 
     if (!key || !key.startsWith(hint.keyPrefix)) {
       process.stdout.write(`\n  That doesn't look like a ${hint.name} key (expected prefix "${hint.keyPrefix}"). Try again.\n\n`);
       return false;
     }
-    // OpenAI's prefix "sk-" also matches Anthropic's "sk-ant-" — reject the overlap
     if (provider === 'openai' && key.startsWith('sk-ant-')) {
       process.stdout.write(`\n  That looks like an Anthropic key, not OpenAI. Pick option 1 instead.\n\n`);
       return false;
@@ -108,8 +121,8 @@ export async function ensureSetup(): Promise<boolean> {
     const yaml = DEFAULT_TEMPLATE.replace(/{{PROVIDER}}/g, provider).replace('{{KEY}}', key);
     fs.writeFileSync(cfgPath, yaml, { mode: 0o600 });
 
-    process.stdout.write(`\n  ✓ Saved ${cfgPath}\n`);
-    process.stdout.write('  Starting Pantheon…\n\n');
+    process.stdout.write(`\n  ✓ Saved to ${cfgPath}\n`);
+    if (!force) process.stdout.write('  Starting Pantheon…\n\n');
     return true;
   } finally {
     rl.close();
