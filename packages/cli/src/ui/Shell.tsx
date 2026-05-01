@@ -381,6 +381,10 @@ export function Shell() {
           body:    JSON.stringify({ prompt: text, projectId: route.projectId }),
         });
 
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Stream error ${res.status}: ${errText}`);
+        }
         if (!res.body) throw new Error('No stream body');
         const reader  = res.body.getReader();
         const decoder = new TextDecoder();
