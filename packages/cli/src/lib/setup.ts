@@ -4,7 +4,7 @@ import path from 'node:path';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 
-const DEFAULT_TEMPLATE = `ai:
+const CONFIG_TEMPLATE = `ai:
   default_provider: "{{PROVIDER}}"
 
   providers:
@@ -12,10 +12,10 @@ const DEFAULT_TEMPLATE = `ai:
       api_key: "{{KEY}}"
 
   models:
-    router:     "claude-haiku-4-5-20251001"
-    core:       "claude-sonnet-4-6"
-    specialist: "claude-opus-4-7"
-    btw:        "claude-haiku-4-5-20251001"
+    router:     "{{MODEL_ROUTER}}"
+    core:       "{{MODEL_CORE}}"
+    specialist: "{{MODEL_SPECIALIST}}"
+    btw:        "{{MODEL_BTW}}"
 
 mcp:
   port: 3100
@@ -30,6 +30,27 @@ limits:
   max_revision_loops: 2
   max_parallel_specialists: 3
 `;
+
+const PROVIDER_MODELS: Record<string, { router: string; core: string; specialist: string; btw: string }> = {
+  anthropic: {
+    router:     'claude-haiku-4-5-20251001',
+    core:       'claude-sonnet-4-6',
+    specialist: 'claude-opus-4-7',
+    btw:        'claude-haiku-4-5-20251001',
+  },
+  openai: {
+    router:     'gpt-4o-mini',
+    core:       'gpt-4o',
+    specialist: 'o3',
+    btw:        'gpt-4o-mini',
+  },
+  google: {
+    router:     'gemini-2.0-flash',
+    core:       'gemini-2.5-pro',
+    specialist: 'gemini-2.5-pro',
+    btw:        'gemini-2.0-flash',
+  },
+};
 
 const PROVIDER_HINTS: Record<string, { name: string; keyPrefix: string; signupUrl: string }> = {
   anthropic: { name: 'Anthropic',     keyPrefix: 'sk-ant-',  signupUrl: 'https://console.anthropic.com/settings/keys' },
@@ -97,7 +118,14 @@ async function runSetupWizard(cfgPath: string, force: boolean): Promise<boolean>
       const cfgDir = path.dirname(cfgPath);
       fs.mkdirSync(cfgDir, { recursive: true });
       if (!fs.existsSync(cfgPath)) {
-        const stub = DEFAULT_TEMPLATE.replace(/{{PROVIDER}}/g, 'anthropic').replace('{{KEY}}', 'YOUR_API_KEY_HERE');
+        const m = PROVIDER_MODELS['anthropic']!;
+      const stub = CONFIG_TEMPLATE
+        .replace(/{{PROVIDER}}/g, 'anthropic')
+        .replace('{{KEY}}', 'YOUR_API_KEY_HERE')
+        .replace('{{MODEL_ROUTER}}', m.router)
+        .replace('{{MODEL_CORE}}', m.core)
+        .replace('{{MODEL_SPECIALIST}}', m.specialist)
+        .replace('{{MODEL_BTW}}', m.btw);
         fs.writeFileSync(cfgPath, stub);
       }
       process.stdout.write(`\n  Edit ${cfgPath} to add your API key, then run 'pantheon' again.\n\n`);
@@ -118,7 +146,14 @@ async function runSetupWizard(cfgPath: string, force: boolean): Promise<boolean>
 
     const cfgDir = path.dirname(cfgPath);
     fs.mkdirSync(cfgDir, { recursive: true });
-    const yaml = DEFAULT_TEMPLATE.replace(/{{PROVIDER}}/g, provider).replace('{{KEY}}', key);
+    const m = PROVIDER_MODELS[provider]!;
+    const yaml = CONFIG_TEMPLATE
+      .replace(/{{PROVIDER}}/g, provider)
+      .replace('{{KEY}}', key)
+      .replace('{{MODEL_ROUTER}}', m.router)
+      .replace('{{MODEL_CORE}}', m.core)
+      .replace('{{MODEL_SPECIALIST}}', m.specialist)
+      .replace('{{MODEL_BTW}}', m.btw);
     fs.writeFileSync(cfgPath, yaml, { mode: 0o600 });
 
     process.stdout.write(`\n  ✓ Saved to ${cfgPath}\n`);
