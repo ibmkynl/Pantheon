@@ -11,7 +11,6 @@ import type { SseEmitter } from '../sse.js';
 
 // packages/mcp-server/dist/index.js → 3 levels up = repo root
 const AGENTS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../agents');
-const VALID_TIERS = ['router-tier', 'core-tier', 'specialist-tier'] as const;
 
 export function registerAgentTools(server: McpServer, sseEmitter: SseEmitter): void {
   server.registerTool(
@@ -211,9 +210,6 @@ export function registerAgentTools(server: McpServer, sseEmitter: SseEmitter): v
       },
     },
     async ({ name, tier, content }) => {
-      if (!VALID_TIERS.includes(tier)) {
-        throw new Error(`Invalid tier "${tier}". Must be one of: ${VALID_TIERS.join(', ')}`);
-      }
       const dir  = path.join(AGENTS_DIR, tier);
       const file = path.join(dir, `${name}.md`);
 
