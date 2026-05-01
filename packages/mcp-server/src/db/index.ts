@@ -1,13 +1,38 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as schema from './schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// pantheon.db lives at repo root — tsup bundles everything to dist/index.js,
-// so __dirname = .../packages/mcp-server/dist → 3 levels up to repo root
-const DB_PATH = path.resolve(__dirname, '../../../pantheon.db');
+
+/**
+ * Resolve the SQLite DB path. Search order:
+ *   1. $PANTHEON_DB_PATH (explicit override)
+ *   2. ./pantheon.db (CWD project-local — when CWD already has one)
+ *   3. $PANTHEON_HOME/data/pantheon.db (defaults to ~/.pantheon/data/pantheon.db)
+ */
+function resolveDbPath(): string {
+  const env = process.env['PANTHEON_DB_PATH'];
+  if (env) {
+    fs.mkdirSync(path.dirname(env), { recursive: true });
+    return env;
+  }
+
+  const cwdLocal = path.resolve(process.cwd(), 'pantheon.db');
+  if (fs.existsSync(cwdLocal)) return cwdLocal;
+
+  const home  = process.env['PANTHEON_HOME'] || path.join(os.homedir(), '.pantheon');
+  const dbDir = path.join(home, 'data');
+  fs.mkdirSync(dbDir, { recursive: true });
+  return path.join(dbDir, 'pantheon.db');
+}
+
+const DB_PATH = resolveDbPath();
+// Suppress unused-import warning when env path doesn't need __dirname
+void __dirname;
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _sqlite: Database.Database | null = null;

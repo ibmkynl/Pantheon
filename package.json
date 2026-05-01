@@ -1,10 +1,27 @@
 {
-  "name": "pantheon",
-  "version": "0.1.0",
-  "private": true,
+  "name": "pantheon-cli",
+  "version": "0.2.0",
+  "description": "Self-extending agentic OS — install once, type naturally, AI handles planning, orchestration, execution, and testing",
+  "keywords": ["ai", "agent", "mcp", "cli", "anthropic", "openai", "gemini", "orchestrator", "llm"],
+  "homepage": "https://github.com/ibmkynl/Pantheon#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/ibmkynl/Pantheon.git" },
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "pantheon": "packages/cli/dist/index.js"
+  },
+  "files": [
+    "packages/cli/dist/",
+    "packages/mcp-server/dist/",
+    "packages/orchestrator/dist/",
+    "agents/",
+    "scripts/install.js",
+    "pantheon.yaml.example",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=9.0.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
     "build": "pnpm -r build",
@@ -13,7 +30,26 @@
     "start": "pnpm --filter @pantheon/mcp-server start",
     "dev:mcp": "pnpm --filter @pantheon/mcp-server dev",
     "dev:orchestrator": "pnpm --filter @pantheon/orchestrator dev",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "prepublishOnly": "pnpm -r build && pnpm -r typecheck",
+    "postinstall": "node scripts/install.js || true"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.0",
+    "@modelcontextprotocol/sdk": "^1.11.4",
+    "better-sqlite3": "^11.9.1",
+    "commander": "^12.1.0",
+    "drizzle-orm": "^0.42.0",
+    "fastify": "^5.3.3",
+    "ink": "^5.2.0",
+    "react": "^18.3.1",
+    "uuid": "^11.1.0",
+    "yaml": "^2.8.0",
+    "zod": "^3.25.0"
+  },
+  "optionalDependencies": {
+    "openai": "^4.77.0",
+    "@google/genai": "^0.7.0"
   },
   "devDependencies": {
     "typescript": "^5.8.3"
