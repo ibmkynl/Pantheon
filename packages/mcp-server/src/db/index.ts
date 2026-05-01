@@ -160,5 +160,79 @@ export function initSchema(): void {
       INSERT INTO memory_fts(memory_fts, rowid, key, value, tags)
       VALUES ('delete', old.id, old.key, old.value, old.tags);
     END;
+
+    CREATE TABLE IF NOT EXISTS code_symbols (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT,
+      file_path  TEXT NOT NULL,
+      name       TEXT NOT NULL,
+      kind       TEXT NOT NULL,
+      language   TEXT,
+      line_start INTEGER NOT NULL,
+      line_end   INTEGER,
+      signature  TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS code_symbols_name_idx ON code_symbols(name, project_id);
+    CREATE INDEX IF NOT EXISTS code_symbols_file_idx ON code_symbols(file_path, project_id);
+
+    CREATE TABLE IF NOT EXISTS code_refs (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT,
+      from_file  TEXT NOT NULL,
+      to_symbol  TEXT NOT NULL,
+      to_file    TEXT,
+      kind       TEXT NOT NULL,
+      line       INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS code_refs_symbol_idx ON code_refs(to_symbol, project_id);
+    CREATE INDEX IF NOT EXISTS code_refs_file_idx   ON code_refs(from_file, project_id);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS code_symbols_fts
+    USING fts5(name, signature, content='code_symbols', content_rowid='id');
+
+    CREATE TRIGGER IF NOT EXISTS csyms_fts_insert
+    AFTER INSERT ON code_symbols BEGIN
+      INSERT INTO code_symbols_fts(rowid, name, signature)
+      VALUES (new.id, new.name, new.signature);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS csyms_fts_update
+    AFTER UPDATE ON code_symbols BEGIN
+      INSERT INTO code_symbols_fts(code_symbols_fts, rowid, name, signature)
+      VALUES ('delete', old.id, old.name, old.signature);
+      INSERT INTO code_symbols_fts(rowid, name, signature)
+      VALUES (new.id, new.name, new.signature);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS csyms_fts_delete
+    AFTER DELETE ON code_symbols BEGIN
+      INSERT INTO code_symbols_fts(code_symbols_fts, rowid, name, signature)
+      VALUES ('delete', old.id, old.name, old.signature);
+    END;
+
+    CREATE TABLE IF NOT EXISTS agent_inbox (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      queue_id   TEXT,
+      agent_name TEXT NOT NULL,
+      project_id TEXT,
+      type       TEXT NOT NULL DEFAULT 'message',
+      payload    TEXT,
+      read       INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS agent_inbox_target_idx
+    ON agent_inbox(queue_id, agent_name, project_id, read);
   `);
+
+  // Additive column migrations — safe to run every startup
+  const cols = sqlite.prepare('PRAGMA table_info(agent_queue)').all() as Array<{ name: string }>;
+  if (!cols.some(c => c.name === 'status_message')) {
+    sqlite.exec('ALTER TABLE agent_queue ADD COLUMN status_message TEXT');
+  }
 }
